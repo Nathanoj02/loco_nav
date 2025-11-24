@@ -1,46 +1,38 @@
 # Loco-nav
 
+Michele Focchi, Enrico Saccon, Marco Camurri
+
+This repository is a reduced version of [Locosim](https://github.com/mfocchi/locosim) ([preprint](https://arxiv.org/abs/2305.02107)) and it is intended for reproducing simulations and experiments for the [*Robot Planning and its applications*](https://unitn.coursecatalogue.cineca.it/insegnamenti/2025/50880_650738_94680/2025/50880/10883?annoOrdinamento=2025) course, taught at the University of Trento.
 
 
 
-Michele Focchi, Enrico Saccon
+# Installing `loco_nav`
 
-This repository is a reduced version of [Locosim](https://github.com/mfocchi/locosim) ([preprint](https://arxiv.org/abs/2305.02107)) and it is intended for reproducing simulations and experiments
-for the course of Robot Planning and applications.
+We strongly suggest to install a docker image to avoid compatibility issues. 
+To see how to install the docker image, please follow the instructions below for your favourite operating system:
 
+- 🐧 [Linux](https://github.com/mfocchi/loco_nav/tree/master/install_docker_linux.md)
+- 🍏 [MacOS](https://github.com/mfocchi/loco_nav/tree/master/install_docker_mac.md)
+- 🪟 [Windows](https://github.com/mfocchi/loco_nav/tree/master/install_docker_windows.md).
 
+## Installing the code on the robot
 
-# Installing Loco_nav code
+To install the code and prepare the setup to use the real robot, please follow these [instructions](https://github.com/mfocchi/loco_nav/tree/master/install_real_robot.md).
 
-We strongly suggest to install a docker image to avoid  compatibility issues. To see how to install the docker image follow:
+# Running the Code in Simulation
 
-LINUX:  these [instructions](https://github.com/mfocchi/loco_nav/tree/master/install_docker_linux.md).
+## Closed loop simulation
 
-MAC: these  [instructions](https://github.com/mfocchi/loco_nav/tree/master/install_docker_mac.md).
+> [!IMPORTANT]
+> to run simulation be sure you have commented `bash export ROS_IP=$HOST_COMPUTER_IP` in  `HOSTCOMPUTER`'s `$HOME/trento_lab_home/.bashrc`
 
-WINDOWS: these  [instructions](https://github.com/mfocchi/loco_nav/tree/master/install_docker_windows.md).
-
-
-
-# **Installing Real Robot Code**
-
-To install the code and prepare the setup to use the real robot follow these [instructions](https://github.com/mfocchi/loco_nav/tree/master/install_real_robot.md).
-
-
-
-# **Running the Code** in Simulation
-
-### **Closed loop simulation**
-
-**IMPORTANT!** to run simulation be sure you have commented **export ROS_IP=$HOST_COMPUTER_IP** in  HOSTCOMPUTER $HOME/trento_lab_home/.bashrc 
-
-1. In a new terminal start docker with the alias **lab**
+1. In a new terminal, start a docker image by running the alias **lab**
 
 ```
 lab
 ```
 
-2. To start the simulation with 2 LIMO in the hexagon arena
+2. To start a simulation with 2 LIMO in the hexagon arena
 
 ```
 roslaunch loco_planning multiple_robots.launch
@@ -72,25 +64,23 @@ roslaunch loco_planning planner_voronoi.py
 
 
 
-### Options
+### Alternative Options
 
-O1. For debug mode (2 robots follow a predefined chicane trajectory):
+1. To run the code in debug mode (2 robots follow a predefined chicane trajectory):
 
 ```
 roslaunch loco_planning multiple_robots.launch start_controller:=true debug:=true
 ```
 
-O2. To generate always the same map (stored in $(find map_pkg)/config/full_config.yaml): 
+2. To generate always the same map (stored in `$(find map_pkg)/config/full_config.yaml`): 
 
 ```
 roslaunch loco_planning multiple_robots.launch start_controller:=true generate_new_config:=false
 ```
 
+### Acquire a Map of a Labyrinth
 
-
-### **Acquire a Map of a Labyrinth**
-
-1.  launch the simulation with the Labyrinth, the **gmapping** package and the LIDAR sensor enabled: 
+1.  launch the simulation with the Labyrinth, the `gmapping` package and the LIDAR sensor enabled: 
 
 ```
 roslaunch loco_planning labyrinth_slam_toolbox.launch 
@@ -124,7 +114,7 @@ rosrun map_pkg save_map.py labyrinth
 
 
 
-### **Navigate the Labyrinth**
+### Navigate the Labyrinth
 
 1.  launch the simulation with the Labyrinth, the **amcl** localization package and the LIDAR sensor enabled: 
 
@@ -134,7 +124,7 @@ roslaunch loco_planning labyrinth_amcl.launch sensors:=true
 
 
 
-# **Running the Code on Real Robot**
+# Running the code on the real robot
 
 1. Run docker on LIMO canning this in a HOSTCOMPUTER terminal:
 
@@ -148,7 +138,7 @@ connect_limo
 lab_planning
 ```
 
-3. in the same terminal in HOSTCOMPUTER (inside docker) run the alias 
+3. In the same terminal in HOSTCOMPUTER (inside docker) run the alias 
 
 ```
 real_robot
@@ -178,7 +168,7 @@ python3 -i limo_control.py
 
 you can use this code both for simulation and real robot, just set the parameter real_robot: False/True in **params.yaml**. If you use limo_control.py he will take care of calling the alias real_robot and sim autonomatically, you do not have to do it.
 
-### IDE Pycharm
+# Pycharm IDE
 
 We recommend to use an IDE to run and edit the Python files, like Pycharm community. To install it,  you just need to download and unzip the program:
 
@@ -193,4 +183,3 @@ You can run separately the controllers for debugging, by running
 ```
 ros_ws/src/loco_nav/loco_planning/scripts/spawn_controllers.py
 ```
-
