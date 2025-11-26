@@ -45,7 +45,6 @@ docker rm -f docker_container >/dev/null 2>&1 || true; \
 docker run --name docker_container \
   --workdir="/root"  -it \
   --device=/dev/ttyUSB0:/dev/ttyUSB0 \
-  --volume="/tmp/.X11-unix:/tmp/.X11-unix \
   --volume="$HOME/trento_lab_home:/root" \
   --env="DISPLAY=host.docker.internal:0" \
   --privileged --shm-size=2g --rm \
