@@ -26,10 +26,10 @@ To install the code and prepare the setup to use the real robot, please follow t
 > [!IMPORTANT]
 > to run simulation be sure you have commented `bash export ROS_IP=$HOST_COMPUTER_IP` in  `HOSTCOMPUTER`'s `$HOME/trento_lab_home/.bashrc`
 
-1. In a new terminal, start a docker image by running the alias **lab**
+1. In a new terminal, start a docker image by running the alias **lab_planning**
 
 ```
-lab
+lab_planning
 ```
 
 2. To start a simulation with 2 LIMO in the hexagon arena
@@ -47,7 +47,7 @@ dock-other
 4. To send a specific reference for the first robot:
 
 ```
-rostopic pub /limo0/ref loco_planning/Reference "{x_d: 0.5, y_d: 0.0, theta_d: 0.0, v_d: 0.1, omega_d: 0.0}"
+rostopic pub /limo0/ref loco_planning/Reference "{x_d: 0.4, y_d: 0.0, theta_d: 0.0, v_d: 0.01, omega_d: 0.0}"
 ```
 
 5. To test an RRT planner (alternative to 4.) (first do point 2. or set StartSimulation=True)
