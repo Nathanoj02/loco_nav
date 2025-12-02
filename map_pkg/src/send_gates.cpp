@@ -39,7 +39,7 @@ public:
   {
     ROS_INFO("Node created.");
     // Latched publisher to mimic ROS2 QoS durability/transient_local for one-shot publish
-    publisher_ = nh_.advertise<geometry_msgs::PoseArray>("/gates", 1, /*latch=*/true);
+    publisher_ = nh_.advertise<geometry_msgs::PoseArray>("/gates", 1, /*latch=*/false);
   }
 
   bool configure()
@@ -79,7 +79,7 @@ public:
 
   bool activate()
   {
-    ROS_INFO("Activating node.");
+    //ROS_INFO("Activating node.");
 
     std::vector<geometry_msgs::Pose> pose_array_temp;
     pose_array_temp.reserve(data.x.size());
@@ -101,7 +101,7 @@ public:
     // Publish message (latched)
     publisher_.publish(msg);
 
-    ROS_INFO("Node activated.");
+    //ROS_INFO("Node activated.");
     return true;
   }
 
@@ -135,9 +135,12 @@ int main(int argc, char* argv[])
     ROS_FATAL("Configuration failed.");
     return 1;
   }
-  if (!node.activate()) {
-    ROS_FATAL("Activation failed.");
-    return 1;
+  ros::Rate rate(5);
+  while (ros::ok()){
+      if (!node.activate()) { ROS_FATAL("Gate publish failed.");
+        return 1;
+      }
+    rate.sleep();
   }
 
   // Keep the node alive so latched topic is available to late subscribers

@@ -48,7 +48,7 @@ public:
   ObstaclesPublisher() : nh_("~")
   {
     ROS_INFO("Node created.");
-    pub_ = nh_.advertise<obstacles_msgs::ObstacleArrayMsg>("/obstacles", 1, /*latch=*/true);
+    pub_ = nh_.advertise<obstacles_msgs::ObstacleArrayMsg>("/obstacles", 1, /*latch=*/false);
     ros::Duration(0.3).sleep();
   }
 
@@ -100,7 +100,7 @@ public:
 
   bool activate()
   {
-    ROS_INFO("Activating node send_obstacles.");
+    //ROS_INFO("Activating node send_obstacles.");
 
     std::vector<Obstacle> obstacles;
     obstacles.reserve(data.vect_x.size());
@@ -140,7 +140,7 @@ public:
       // }
     }
 
-    ROS_INFO("Publishing %zu obstacles", obstacles.size());
+    //ROS_INFO("Publishing %zu obstacles", obstacles.size());
     publish_obstacles(obstacles);
     return true;
   }
@@ -156,9 +156,7 @@ private:
     msg.header = hh;
 
     for (const auto& o : obstacles) {
-      ROS_INFO("Publishing Obstacle: %s x=%f, y=%f, yaw=%f, radius=%f, dx=%f, dy=%f",
-               (o.type == OBSTACLE_TYPE::BOX ? "box" : "cylinder"),
-               o.x, o.y, o.yaw, o.radius, o.dx, o.dy);
+      //ROS_INFO("Publishing Obstacle: %s x=%f, y=%f, yaw=%f, radius=%f, dx=%f, dy=%f", (o.type == OBSTACLE_TYPE::BOX ? "box" : "cylinder"), o.x, o.y, o.yaw, o.radius, o.dx, o.dy);
 
       obstacles_msgs::ObstacleMsg obs;
       if (o.type == OBSTACLE_TYPE::CYLINDER) {
@@ -180,7 +178,7 @@ private:
     }
 
     pub_.publish(msg);
-    ROS_INFO("Published %zu obstacles on /obstacles", msg.obstacles.size());
+    //ROS_INFO("Published %zu obstacles on /obstacles", msg.obstacles.size());
   }
 };
 
@@ -194,9 +192,12 @@ int main(int argc, char* argv[])
     ROS_FATAL("Configuration failed.");
     return 1;
   }
-  if (!node.activate()) {
-    ROS_FATAL("Activation failed.");
-    return 1;
+  ros::Rate rate(5);
+  while (ros::ok()){
+      if (!node.activate()) { ROS_FATAL("Obstacle publish failed.");
+        return 1;
+      }
+    rate.sleep();
   }
 
   ros::spin();

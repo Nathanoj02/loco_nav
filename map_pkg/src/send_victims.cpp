@@ -82,7 +82,7 @@ public:
     }
 
     // Create publishers (queue size 1, non-latched to mirror ROS2 default)
-    victims_pub_ = nh_.advertise<obstacles_msgs::ObstacleArrayMsg>("/victims", 1, true);
+    victims_pub_ = nh_.advertise<obstacles_msgs::ObstacleArrayMsg>("/victims", 1, /*latch=*/false);
     markers_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/markers/victims", 1, true);
 
     return true;
@@ -111,7 +111,7 @@ private:
 
   void publish_victim(const Victim& vict, obstacles_msgs::ObstacleArrayMsg& msg)
   {
-    ROS_INFO("Adding victim at x=%f, y=%f", vict.x, vict.y);
+    //ROS_INFO("Adding victim at x=%f, y=%f", vict.x, vict.y);
 
     obstacles_msgs::ObstacleMsg obs;
     geometry_msgs::Polygon pol;
@@ -132,7 +132,7 @@ private:
 
   void publish_victims(const obstacles_msgs::ObstacleArrayMsg& msg)
   {
-    ROS_INFO("[1] Publishing victims.");
+    //ROS_INFO("[1] Publishing victims.");
     visualization_msgs::MarkerArray markers;
 
     for (size_t vict_id = 0; vict_id < msg.obstacles.size(); ++vict_id) {
@@ -181,9 +181,9 @@ private:
     }
 
     victims_pub_.publish(msg);
-    ROS_INFO("[2] Victims published, publishing markers.");
+    //ROS_INFO("[2] Victims published, publishing markers.");
     markers_pub_.publish(markers);
-    ROS_INFO("[3] Markers published.");
+    //ROS_INFO("[3] Markers published.");
   }
 };
 
@@ -197,11 +197,12 @@ int main(int argc, char * argv[])
     ROS_FATAL("Configuration failed.");
     return 1;
   }
-  if (!node.activate()) {
-    ROS_FATAL("Activation failed.");
-    return 1;
+  ros::Rate rate(5);
+  while (ros::ok()){
+      if (!node.activate()) { ROS_FATAL("Victim publish failed.");
+        return 1;
+      }
+    rate.sleep();
   }
-
-  ros::spin();
   return 0;
 }

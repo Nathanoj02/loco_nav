@@ -39,7 +39,7 @@ public:
   {
     ROS_INFO("Node created.");
     // Use latched publishers to emulate ROS2 QoS KeepLast(1) durability for static data
-    pub_map_borders_     = nh_.advertise<geometry_msgs::Polygon>("/map_borders", 1, /*latch=*/true);
+    pub_map_borders_     = nh_.advertise<geometry_msgs::Polygon>("/map_borders", 1, /*latch=*/false);
     //pub_borders_stamped_ = nh_.advertise<geometry_msgs::PolygonStamped>("/borders", 1, /*latch=*/true);
   }
 
@@ -70,7 +70,7 @@ public:
 
   bool activate()
   {
-    ROS_INFO("Activating node.");
+    //ROS_INFO("Activating node.");
 
     std_msgs::Header hh;
     hh.stamp = ros::Time::now();
@@ -95,7 +95,7 @@ public:
     pub_map_borders_.publish(pol);
     //pub_borders_stamped_.publish(pol_stamped);
 
-    ROS_INFO("Node active.");
+    //ROS_INFO("Node active.");
     return true;
   }
 };
@@ -110,11 +110,13 @@ int main(int argc, char* argv[])
     ROS_FATAL("Configuration failed.");
     return 1;
   }
-  if (!node.activate()) {
-    ROS_FATAL("Activation failed.");
-    return 1;
+  ros::Rate rate(5);
+  while (ros::ok()){
+      if (!node.activate()) { ROS_FATAL("Map Border publish failed.");
+        return 1;
+      }
+    rate.sleep();
   }
-
   ros::spin();
   return 0;
 }
