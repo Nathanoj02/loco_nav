@@ -141,7 +141,7 @@ private:
       const geometry_msgs::Point32& point = msg.obstacles[vict_id].polygon.points[0];
       pose.position.x = point.x;
       pose.position.y = point.y;
-      pose.position.z = point.y;  // keep parity with original
+      pose.position.z = 0.0;  
       double radius = msg.obstacles[vict_id].radius;
 
       // Cylinder marker for victim position
