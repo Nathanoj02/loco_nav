@@ -1,11 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys
 import os, math
 from pathlib import Path
 import yaml
 import subprocess
 import rospy
+
+# Allow importing files from the same directory
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, script_dir)
 
 from geo_utility import *
 

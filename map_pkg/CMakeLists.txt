@@ -31,19 +31,20 @@ include_directories(
 
 catkin_install_python(
   PROGRAMS
+    # NODES (Scripts you run with rosrun/roslaunch)
     scripts/spawn_obstacles.py
     scripts/spawn_gates.py
     scripts/spawn_borders.py
-    scripts/spawn_utility_.py
     scripts/create_map_pgm.py
     scripts/generate_config_file.py
     scripts/ground_truth_odom.py
-    scripts/geo_utility.py 
     scripts/save_map.py 
     scripts/convert_labyrinth_map.py
+
+    # REMOVED: scripts/geo_utility.py (It is a library, not a node)
+    # REMOVED: scripts/spawn_utility_.py (It is a library, not a node)
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
-  
 
 
 ## C++ executables

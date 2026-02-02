@@ -10,6 +10,12 @@ import matplotlib
 matplotlib.use('TkAgg')
 import rospy as ros
 import numpy as np
+
+import sys
+import os
+# Add the directory containing this script to the Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from utils.velocity_generator import VelocityGenerator
 from utils.trajectory_generator import Trajectory, ModelsList
 from nav_msgs.msg import Odometry
@@ -24,7 +30,6 @@ from controllers.lyapunov import LyapunovController, LyapunovParams, Robot
 import params as conf
 np.set_printoptions(threshold=np.inf, precision = 5, linewidth = 1000, suppress = True)
 import argparse
-import sys
 from utils.communication_utils import getInitialStateFromOdom
 
 class Controller():

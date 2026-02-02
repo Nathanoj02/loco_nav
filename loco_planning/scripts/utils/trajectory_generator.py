@@ -1,5 +1,10 @@
 import numpy as np
 
+import sys
+import os
+# Allow importing from the parent directory
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from unicycle import Unicycle
 
 from enum import Enum

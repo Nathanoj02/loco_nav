@@ -21,15 +21,14 @@ catkin_package(
 
 catkin_install_python(
   PROGRAMS
-    scripts/params.py  
-    # Controllers  
+    # ONLY list scripts here that you run with "rosrun"
     scripts/controller.py
     scripts/spawn_controllers.py
-    scripts/controllers/lyapunov.py
-    # Planners - Base
-    scripts/planner_base.py
-    # Planners - Voronoi
-    scripts/planner_voronoi.py
+    
+    # REMOVE params.py (It is a library, not a node)
+    # REMOVE lyapunov.py (Assuming this is imported by controller, not run alone)
+    # REMOVE planner_base.py (Assuming this is a base class)
+    # REMOVE planner_voronoi.py (Assuming this is imported)
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
   

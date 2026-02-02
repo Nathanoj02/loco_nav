@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys
 import os, yaml, random
 import numpy as np
 from pathlib import Path
 import subprocess
 import rospy
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, script_dir)
 
 from geo_utility import *
 from spawn_borders import get_borders_points

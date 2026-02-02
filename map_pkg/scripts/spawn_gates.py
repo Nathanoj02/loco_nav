@@ -1,10 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys
 import os, yaml, random
 import numpy as np
 import subprocess
 import rospy
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
+
 from termcolor import colored
 from geo_utility import *
 from spawn_borders import get_borders_points
