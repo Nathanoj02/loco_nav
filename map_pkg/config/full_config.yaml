@@ -1,0 +1,69 @@
+/_:
+  ros__parameters:
+    dx: 10.0
+    dy: 20.0
+    map: hexagon
+    max_timeout: 3
+    use_sim_time: true
+/_/send_gates:
+  ros__parameters:
+    x:
+    - -3.748187367789164
+    y:
+    - 8.060254037844386
+    yaw:
+    - 1.5707963267948966
+/_/send_obstacles:
+  ros__parameters:
+    max_size: 1.0
+    min_size: 0.5
+    n_obstacles: 3
+    no_cylinders: true
+    vect_dim_x:
+    - 0.5171950834062418
+    - 0.5626424535498343
+    - 0.8332662902227006
+    vect_dim_y:
+    - 0.638468994728504
+    - 0.9725655770012203
+    - 0.5498846100707941
+    vect_type:
+    - box
+    - box
+    - box
+    vect_x:
+    - 4.538135455212206
+    - -4.2412308874945595
+    - 3.775404240715636
+    vect_y:
+    - -4.606975448171209
+    - -2.9647585920615427
+    - 7.960086997587027
+    vect_yaw:
+    - -2.3961609991651978
+    - -0.5162810205118782
+    - 0.27197901131191227
+/_/send_timeout:
+  ros__parameters:
+    victims_timeout: 0
+/_/send_victims:
+  ros__parameters:
+    max_weight: 500.0
+    min_weight: 10.0
+    vect_weight:
+    - 34.0
+    - 221.0
+    - 211.0
+    - 245.0
+    vect_x:
+    - -1.4548605061132003
+    - 1.9095128926227538
+    - 0.8097875287777896
+    - 4.859828750757197
+    vect_y:
+    - -6.859450979566777
+    - -6.904928244921688
+    - 6.983079776578929
+    - 2.3295179490748374
+    victims_activated: true
+    victims_timeout: 0
