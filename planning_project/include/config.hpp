@@ -10,7 +10,7 @@ struct Config {
 
     // Robot geometry
     double robot_radius = 0.25;         // LIMO half-width approximately
-    double safety_margin = 0.05;        // extra clearance from obstacles
+    double safety_margin = 0.025;        // extra clearance from obstacles
 
     // Dubins parameters
     double dubins_rho = 1;            // minimum turning radius (v_max / omega_max)

@@ -1,4 +1,5 @@
 #include <ros/ros.h>
+#include <ros/package.h>
 #include <geometry_msgs/Polygon.h>
 #include <geometry_msgs/PoseArray.h>
 #include <nav_msgs/Odometry.h>
@@ -15,6 +16,8 @@
 #include "math_utils.hpp"
 #include <memory>
 #include <iomanip>
+#include <fstream>
+#include <algorithm>
 
 class PathPlanner {
 public:
@@ -211,6 +214,13 @@ public:
         const int refinement_depth = planning::getConfig().refinement_depth;
         grid_map_->refineMixedCells(inflated_obstacles_, shrunk_borders, refinement_depth);
 
+        // Save map to file for visualization
+        std::string pkg_path = ros::package::getPath("planning-project");
+        std::string map_file = pkg_path + "/results/map.json";
+        if (grid_map_->saveToFile(map_file)) {
+            ROS_INFO("Grid map saved for visualization");
+        }
+
         // Build pathfinding graph
         cell_graph_ = std::make_unique<planning::CellGraph>();
         cell_graph_->buildFromGridMap(*grid_map_);
@@ -387,8 +397,109 @@ public:
         ROS_INFO("Executing trajectory: %.2f sec, %.2f m",
                  trajectory_.back().time, dubins_path_.cost);
 
+        // Save trajectory to file for visualization
+        saveTrajectoryToFile();
+
         // Set flag - clockCallback will handle the actual publishing
         trajectory_ready_ = true;
+    }
+
+    void saveTrajectoryToFile() {
+        std::string pkg_path = ros::package::getPath("planning-project");
+        std::string traj_file = pkg_path + "/results/trajectory.json";
+
+        std::ofstream file(traj_file);
+        if (!file.is_open()) {
+            ROS_WARN("Failed to open trajectory file for writing: %s", traj_file.c_str());
+            return;
+        }
+
+        file << std::fixed << std::setprecision(6);
+        file << "{\n";
+
+        // Save start and goal poses
+        file << "  \"start\": {\"x\": " << robot_x_ << ", \"y\": " << robot_y_
+             << ", \"theta\": " << robot_theta_ << "},\n";
+        file << "  \"goal\": {\"x\": " << gate_x_ << ", \"y\": " << gate_y_
+             << ", \"theta\": " << gate_theta_ << "},\n";
+
+        // Save victims (including which ones were visited)
+        file << "  \"victims\": [\n";
+        for (size_t i = 0; i < victims_.size(); ++i) {
+            bool visited = (std::find(chosen_route_.begin(), chosen_route_.end(), i)
+                          != chosen_route_.end());
+            file << "    {\"x\": " << victims_[i].x << ", \"y\": " << victims_[i].y
+                 << ", \"value\": " << victims_[i].value
+                 << ", \"visited\": " << (visited ? "true" : "false") << "}";
+            if (i < victims_.size() - 1) file << ",";
+            file << "\n";
+        }
+        file << "  ],\n";
+
+        // Save chosen route (victim indices)
+        file << "  \"route\": [";
+        for (size_t i = 0; i < chosen_route_.size(); ++i) {
+            file << chosen_route_[i];
+            if (i < chosen_route_.size() - 1) file << ", ";
+        }
+        file << "],\n";
+
+        // Save Dubins path segments
+        file << "  \"dubins_curves\": [\n";
+        for (size_t c = 0; c < dubins_path_.curves.size(); ++c) {
+            const auto& curve = dubins_path_.curves[c];
+            file << "    {\n";
+            file << "      \"arcs\": [\n";
+            for (int a = 0; a < 3; ++a) {
+                const DubinsArc& arc = curve.arcs[a];
+                file << "        {\n";
+                file << "          \"start\": {\"x\": " << arc.start.x << ", \"y\": " << arc.start.y
+                     << ", \"theta\": " << arc.start.theta << "},\n";
+                file << "          \"end\": {\"x\": " << arc.end.x << ", \"y\": " << arc.end.y
+                     << ", \"theta\": " << arc.end.theta << "},\n";
+                file << "          \"k\": " << arc.k << ",\n";
+                file << "          \"length\": " << arc.length << "\n";
+                file << "        }";
+                if (a < 2) file << ",";
+                file << "\n";
+            }
+            file << "      ]\n";
+            file << "    }";
+            if (c < dubins_path_.curves.size() - 1) file << ",";
+            file << "\n";
+        }
+        file << "  ],\n";
+
+        // Save sampled trajectory points (subsample for file size)
+        int subsample = std::max(1, static_cast<int>(trajectory_.size() / 1000));
+        file << "  \"trajectory\": [\n";
+        for (size_t i = 0; i < trajectory_.size(); i += subsample) {
+            const auto& pt = trajectory_[i];
+            file << "    {\"x\": " << pt.x << ", \"y\": " << pt.y
+                 << ", \"theta\": " << pt.theta << ", \"time\": " << pt.time << "}";
+            if (i + subsample < trajectory_.size()) file << ",";
+            file << "\n";
+        }
+        // Always include the last point
+        if (subsample > 1 && !trajectory_.empty()) {
+            const auto& pt = trajectory_.back();
+            file << "    {\"x\": " << pt.x << ", \"y\": " << pt.y
+                 << ", \"theta\": " << pt.theta << ", \"time\": " << pt.time << "}\n";
+        }
+        file << "  ],\n";
+
+        // Save statistics
+        file << "  \"stats\": {\n";
+        file << "    \"total_distance\": " << dubins_path_.cost << ",\n";
+        file << "    \"total_time\": " << (trajectory_.empty() ? 0 : trajectory_.back().time) << ",\n";
+        file << "    \"num_trajectory_points\": " << trajectory_.size() << ",\n";
+        file << "    \"num_victims_visited\": " << chosen_route_.size() << "\n";
+        file << "  }\n";
+
+        file << "}\n";
+        file.close();
+
+        ROS_INFO("Trajectory saved to: %s", traj_file.c_str());
     }
 
     void run() {

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <sstream>
 #include <iostream>
+#include <fstream>
 
 namespace planning {
 
@@ -325,52 +326,6 @@ std::string GridMap::getSummary() const {
     return ss.str();
 }
 
-void GridMap::printASCII(int max_display_width) const {
-    // Compute downsampling factor if needed (0 = no limit)
-    int step = 1;
-    if (max_display_width > 0 && width_ > max_display_width) {
-        step = (width_ + max_display_width - 1) / max_display_width;
-    }
-
-    int display_width = (width_ + step - 1) / step;
-    int display_height = (height_ + step - 1) / step;
-
-    std::cout << getSummary() << "\n";
-    if (step > 1) {
-        std::cout << "(Downsampled " << step << "x for display)\n";
-    }
-    std::cout << "\n";
-
-    // Print from top to bottom (high Y to low Y)
-    for (int dy = display_height - 1; dy >= 0; --dy) {
-        for (int dx = 0; dx < display_width; ++dx) {
-            int gx = dx * step;
-            int gy = dy * step;
-
-            // For downsampled display, show worst case in the block
-            CellState state = CellState::FREE;
-            for (int offy = 0; offy < step && (gy + offy) < height_; ++offy) {
-                for (int offx = 0; offx < step && (gx + offx) < width_; ++offx) {
-                    CellState s = getCell(gx + offx, gy + offy);
-                    if (s == CellState::OCCUPIED) {
-                        state = CellState::OCCUPIED;
-                    } else if (s == CellState::MIXED && state == CellState::FREE) {
-                        state = CellState::MIXED;
-                    }
-                }
-            }
-
-            switch (state) {
-                case CellState::FREE: std::cout << '.'; break;
-                case CellState::OCCUPIED: std::cout << '#'; break;
-                case CellState::MIXED: std::cout << '~'; break;
-            }
-        }
-        std::cout << '\n';
-    }
-    std::cout << std::flush;
-}
-
 CellState GridMap::classifyRectVsPolygon(double x0, double y0, double x1, double y1,
                                           const geometry_msgs::Polygon& polygon) const {
     // Check all four corners of rect vs polygon (obstacle)
@@ -517,6 +472,72 @@ std::vector<const Cell*> GridMap::getFreeCells() const {
         }
     }
     return free_cells;
+}
+
+bool GridMap::saveToFile(const std::string& filename) const {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        return false;
+    }
+
+    // Write JSON format
+    file << "{\n";
+    file << "  \"resolution\": " << resolution_ << ",\n";
+    file << "  \"bounds\": {\n";
+    file << "    \"min_x\": " << min_x_ << ",\n";
+    file << "    \"min_y\": " << min_y_ << ",\n";
+    file << "    \"max_x\": " << max_x_ << ",\n";
+    file << "    \"max_y\": " << max_y_ << "\n";
+    file << "  },\n";
+    file << "  \"grid_size\": {\"width\": " << width_ << ", \"height\": " << height_ << "},\n";
+    file << "  \"refined\": " << (cells_refined_ ? "true" : "false") << ",\n";
+
+    // Write cells
+    file << "  \"cells\": [\n";
+
+    if (cells_refined_) {
+        // Write leaf cells after refinement
+        for (size_t i = 0; i < leaf_cells_.size(); ++i) {
+            const auto& cell = leaf_cells_[i];
+            const char* state_str = (cell.state == CellState::FREE) ? "free" :
+                                   (cell.state == CellState::OCCUPIED) ? "occupied" : "mixed";
+
+            file << "    {\"x0\": " << cell.x0 << ", \"y0\": " << cell.y0
+                 << ", \"x1\": " << cell.x1 << ", \"y1\": " << cell.y1
+                 << ", \"state\": \"" << state_str << "\", \"depth\": " << cell.depth << "}";
+
+            if (i < leaf_cells_.size() - 1) file << ",";
+            file << "\n";
+        }
+    } else {
+        // Write original grid cells
+        bool first = true;
+        for (int gy = 0; gy < height_; ++gy) {
+            for (int gx = 0; gx < width_; ++gx) {
+                if (!first) file << ",\n";
+                first = false;
+
+                double x0, y0, x1, y1;
+                getCellCorners(gx, gy, x0, y0, x1, y1);
+                CellState state = getCell(gx, gy);
+                const char* state_str = (state == CellState::FREE) ? "free" :
+                                       (state == CellState::OCCUPIED) ? "occupied" : "mixed";
+
+                file << "    {\"x0\": " << x0 << ", \"y0\": " << y0
+                     << ", \"x1\": " << x1 << ", \"y1\": " << y1
+                     << ", \"state\": \"" << state_str << "\", \"depth\": 0}";
+            }
+        }
+        file << "\n";
+    }
+
+    file << "  ]\n";
+    file << "}\n";
+
+    file.close();
+    std::cout << "Map saved to: " << filename << std::endl;
+    return true;
 }
 
 }  // namespace planning

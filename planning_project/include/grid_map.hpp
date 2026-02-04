@@ -127,19 +127,20 @@ public:
     std::vector<const Cell*> getFreeCells() const;
 
     /**
-     * @brief Print ASCII representation of the map.
-     *
-     * '.' = free, '#' = occupied, '~' = mixed
-     * Prints to stdout, optionally downsampled for large maps.
-     *
-     * @param max_display_width Maximum characters wide (downsamples if needed)
-     */
-    void printASCII(int max_display_width = 80) const;
-
-    /**
      * @brief Get a string summary of the map.
      */
     std::string getSummary() const;
+
+    /**
+     * @brief Save map to file for visualization.
+     *
+     * Saves grid map data (leaf cells with state, bounds, depth) to a JSON file.
+     * File can be read by Python scripts for plotting.
+     *
+     * @param filename Path to output file (e.g., "results/map.json")
+     * @return true if successful, false otherwise
+     */
+    bool saveToFile(const std::string& filename) const;
 
 private:
     double resolution_;

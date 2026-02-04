@@ -44,6 +44,18 @@ Vec2 lineIntersection(const Vec2& p1, const Vec2& d1, const Vec2& p2, const Vec2
     return p1 + d1 * t;
 }
 
+// Compute signed area of polygon (positive = CCW, negative = CW)
+double polygonSignedArea(const geometry_msgs::Polygon& polygon) {
+    double area = 0.0;
+    size_t n = polygon.points.size();
+    for (size_t i = 0; i < n; ++i) {
+        size_t j = (i + 1) % n;
+        area += polygon.points[i].x * polygon.points[j].y;
+        area -= polygon.points[j].x * polygon.points[i].y;
+    }
+    return area / 2.0;
+}
+
 }  // anonymous namespace
 
 geometry_msgs::Polygon offsetPolygon(const geometry_msgs::Polygon& polygon, double offset) {
@@ -53,6 +65,12 @@ geometry_msgs::Polygon offsetPolygon(const geometry_msgs::Polygon& polygon, doub
     if (n < 3) {
         return result;  // Not a valid polygon
     }
+
+    // Determine winding order: CCW = positive area, CW = negative area
+    double signed_area = polygonSignedArea(polygon);
+    // perp() gives LEFT normal. For CCW polygons, left = inward, so negate to expand outward
+    // For CW polygons, left = outward, so keep positive to expand
+    double actual_offset = (signed_area > 0) ? -offset : offset;
 
     // Compute offset edges and find their intersections
     std::vector<Vec2> offsetPoints;
@@ -74,9 +92,9 @@ geometry_msgs::Polygon offsetPolygon(const geometry_msgs::Polygon& polygon, doub
         Vec2 n1 = d1.perp();
         Vec2 n2 = d2.perp();
 
-        // Offset edge start points
-        Vec2 offset1 = p0 + n1 * offset;
-        Vec2 offset2 = p1 + n2 * offset;
+        // Offset edge start points (using actual_offset which accounts for winding)
+        Vec2 offset1 = p0 + n1 * actual_offset;
+        Vec2 offset2 = p1 + n2 * actual_offset;
 
         // Find intersection of the two offset edges
         Vec2 intersection = lineIntersection(offset1, d1, offset2, d2);
