@@ -11,6 +11,7 @@
 #include "geometry_utils.hpp"
 #include "grid_map.hpp"
 #include "pathfinding.hpp"
+#include "rrt_star.hpp"
 #include "orienteering.hpp"
 #include "config.hpp"
 #include "math_utils.hpp"
@@ -18,6 +19,8 @@
 #include <iomanip>
 #include <fstream>
 #include <algorithm>
+#include <array>
+#include <limits>
 
 class PathPlanner {
 public:
@@ -308,7 +311,8 @@ public:
     }
 
     void generatePath() {
-        double kmax = 1.0 / planning::getConfig().dubins_rho;
+        const auto& config = planning::getConfig();
+        double kmax = 1.0 / config.dubins_rho;
 
         // Build route: [start, victim0, victim1, ..., gate]
         std::vector<std::pair<double, double>> route;
@@ -318,9 +322,25 @@ public:
         }
         route.push_back({gate_x_, gate_y_});
 
-        // Build safe waypoints (adds A* waypoints where direct Dubins collides)
-        auto waypoints = planning::buildSafeWaypoints(
-            *cell_graph_, route, robot_theta_, gate_theta_, kmax, inflated_obstacles_);
+        // Build safe waypoints based on selected planner type
+        std::vector<Point> waypoints;
+
+        if (config.planner_type == planning::PlannerType::SAMPLING) {
+            // Use Informed RRT* (sampling-based approach)
+            ROS_INFO("Using Informed RRT* for path planning...");
+
+            // Compute world bounds from borders
+            std::array<double, 4> bounds = computeWorldBounds();
+
+            waypoints = buildSafeWaypointsRRTWithSave(
+                route, robot_theta_, gate_theta_, kmax, inflated_obstacles_, bounds);
+        } else {
+            // Use A* on grid (combinatorial approach - default)
+            ROS_INFO("Using A* grid search for path planning...");
+
+            waypoints = planning::buildSafeWaypoints(
+                *cell_graph_, route, robot_theta_, gate_theta_, kmax, inflated_obstacles_);
+        }
 
         // Generate multi-point Dubins path
         Pose start_pose = {robot_x_, robot_y_, robot_theta_};
@@ -334,6 +354,170 @@ public:
 
         // Execute the path
         executePath();
+    }
+
+    std::array<double, 4> computeWorldBounds() {
+        // Extract min/max from borders polygon
+        double min_x = std::numeric_limits<double>::max();
+        double max_x = std::numeric_limits<double>::lowest();
+        double min_y = std::numeric_limits<double>::max();
+        double max_y = std::numeric_limits<double>::lowest();
+
+        for (const auto& pt : borders_.points) {
+            min_x = std::min(min_x, static_cast<double>(pt.x));
+            max_x = std::max(max_x, static_cast<double>(pt.x));
+            min_y = std::min(min_y, static_cast<double>(pt.y));
+            max_y = std::max(max_y, static_cast<double>(pt.y));
+        }
+
+        // Add small margin
+        double margin = planning::getConfig().totalInflation();
+        return {min_x + margin, max_x - margin, min_y + margin, max_y - margin};
+    }
+
+    std::vector<Point> buildSafeWaypointsRRTWithSave(
+        const std::vector<std::pair<double, double>>& route,
+        double start_theta,
+        double end_theta,
+        double kmax,
+        const std::vector<geometry_msgs::Polygon>& obstacles,
+        const std::array<double, 4>& bounds) {
+
+        std::vector<Point> waypoints;
+        if (route.size() < 2) return waypoints;
+
+        const auto& config = planning::getConfig();
+        std::string pkg_path = ros::package::getPath("planning-project");
+        std::string rrt_file = pkg_path + "/results/rrt_tree.json";
+
+        // Open file for combined RRT data
+        std::ofstream file(rrt_file);
+        if (!file.is_open()) {
+            ROS_WARN("Failed to open RRT file: %s", rrt_file.c_str());
+            return planning::buildSafeWaypointsRRT(route, start_theta, end_theta, kmax, obstacles, bounds);
+        }
+
+        file << std::fixed << std::setprecision(6);
+        file << "{\n";
+
+        // Save bounds
+        file << "  \"bounds\": {\"min_x\": " << bounds[0] << ", \"max_x\": " << bounds[1]
+             << ", \"min_y\": " << bounds[2] << ", \"max_y\": " << bounds[3] << "},\n";
+
+        // Save route points
+        file << "  \"route\": [\n";
+        for (size_t i = 0; i < route.size(); ++i) {
+            file << "    [" << route[i].first << ", " << route[i].second << "]";
+            if (i < route.size() - 1) file << ",";
+            file << "\n";
+        }
+        file << "  ],\n";
+
+        // Save obstacles
+        file << "  \"obstacles\": [\n";
+        for (size_t i = 0; i < obstacles.size(); ++i) {
+            file << "    [";
+            for (size_t j = 0; j < obstacles[i].points.size(); ++j) {
+                file << "[" << obstacles[i].points[j].x << ", " << obstacles[i].points[j].y << "]";
+                if (j < obstacles[i].points.size() - 1) file << ", ";
+            }
+            file << "]";
+            if (i < obstacles.size() - 1) file << ",";
+            file << "\n";
+        }
+        file << "  ],\n";
+
+        // Process each segment and collect all trees
+        file << "  \"segments\": [\n";
+
+        for (size_t i = 0; i < route.size() - 1; ++i) {
+            double x1 = route[i].first, y1 = route[i].second;
+            double x2 = route[i + 1].first, y2 = route[i + 1].second;
+
+            double theta1 = (i == 0) ? start_theta : std::atan2(y1 - route[i-1].second, x1 - route[i-1].first);
+            double theta2 = (i == route.size() - 2) ? end_theta : std::atan2(y2 - y1, x2 - x1);
+
+            Pose pose1 = {x1, y1, theta1};
+            Pose pose2 = {x2, y2, theta2};
+
+            bool collides = planning::directDubinsCollides(pose1, pose2, kmax, obstacles);
+
+            file << "    {\n";
+            file << "      \"start\": [" << x1 << ", " << y1 << "],\n";
+            file << "      \"goal\": [" << x2 << ", " << y2 << "],\n";
+            file << "      \"direct\": " << (collides ? "false" : "true") << ",\n";
+
+            if (collides) {
+                planning::InformedRRTStar rrt(obstacles, bounds);
+                rrt.setStepSize(config.rrt_step_size);
+
+                auto result = rrt.plan(x1, y1, x2, y2, config.rrt_max_iterations, config.rrt_goal_radius);
+
+                // Save tree edges
+                file << "      \"edges\": [\n";
+                const auto& nodes = rrt.getNodes();
+                bool first_edge = true;
+                for (const auto& node : nodes) {
+                    if (node->parent) {
+                        if (!first_edge) file << ",\n";
+                        first_edge = false;
+                        file << "        [[" << node->parent->x << ", " << node->parent->y
+                             << "], [" << node->x << ", " << node->y << "]]";
+                    }
+                }
+                file << "\n      ],\n";
+
+                // Save path
+                file << "      \"path\": [";
+                for (size_t j = 0; j < result.path.size(); ++j) {
+                    file << "[" << result.path[j].first << ", " << result.path[j].second << "]";
+                    if (j < result.path.size() - 1) file << ", ";
+                }
+                file << "],\n";
+
+                if (result.found && result.path.size() > 2) {
+                    auto smoothed = planning::smoothRRTPath(result.path, obstacles, 50, 30);
+
+                    file << "      \"smoothed\": [";
+                    for (size_t j = 0; j < smoothed.size(); ++j) {
+                        file << "[" << smoothed[j].first << ", " << smoothed[j].second << "]";
+                        if (j < smoothed.size() - 1) file << ", ";
+                    }
+                    file << "],\n";
+
+                    for (size_t j = 1; j < smoothed.size() - 1; ++j) {
+                        waypoints.push_back({static_cast<float>(smoothed[j].first),
+                                            static_cast<float>(smoothed[j].second)});
+                    }
+                } else {
+                    file << "      \"smoothed\": [],\n";
+                }
+
+                file << "      \"num_nodes\": " << nodes.size() << ",\n";
+                file << "      \"cost\": " << result.cost << "\n";
+            } else {
+                file << "      \"edges\": [],\n";
+                file << "      \"path\": [[" << x1 << ", " << y1 << "], [" << x2 << ", " << y2 << "]],\n";
+                file << "      \"smoothed\": [],\n";
+                file << "      \"num_nodes\": 0,\n";
+                file << "      \"cost\": " << std::sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1)) << "\n";
+            }
+
+            file << "    }";
+            if (i < route.size() - 2) file << ",";
+            file << "\n";
+
+            if (i < route.size() - 2) {
+                waypoints.push_back({static_cast<float>(x2), static_cast<float>(y2)});
+            }
+        }
+
+        file << "  ]\n";
+        file << "}\n";
+        file.close();
+
+        ROS_INFO("RRT* tree saved to: %s", rrt_file.c_str());
+        return waypoints;
     }
 
     void sampleTrajectory() {

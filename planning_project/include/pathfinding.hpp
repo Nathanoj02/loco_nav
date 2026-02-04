@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <optional>
+#include <array>
 #include "grid_map.hpp"
 #include "dubins.hpp"
 #include "multipoint_dubins.hpp"
@@ -232,6 +233,28 @@ PathInfo generateDubinsPath(
     double kmax,
     int num_angles = 8,
     int refine_steps = 2);
+
+/**
+ * @brief Build safe waypoints using Informed RRT* (sampling-based approach).
+ *
+ * Alternative to buildSafeWaypoints that uses RRT* instead of A* on grid.
+ * For each segment, runs RRT* to find collision-free path, then smooths it.
+ *
+ * @param route Ordered list of positions: [start, victim0, victim1, ..., gate]
+ * @param start_theta Starting orientation
+ * @param end_theta Required gate orientation
+ * @param kmax Maximum curvature
+ * @param obstacles Inflated obstacles
+ * @param bounds World boundaries [min_x, max_x, min_y, max_y]
+ * @return Vector of intermediate Points for multi_point_dubins
+ */
+std::vector<Point> buildSafeWaypointsRRT(
+    const std::vector<std::pair<double, double>>& route,
+    double start_theta,
+    double end_theta,
+    double kmax,
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    const std::array<double, 4>& bounds);
 
 }  // namespace planning
 

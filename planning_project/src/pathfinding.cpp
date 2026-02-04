@@ -1,4 +1,6 @@
 #include "pathfinding.hpp"
+#include "rrt_star.hpp"
+#include "config.hpp"
 #include <queue>
 #include <cmath>
 #include <cfloat>
@@ -525,6 +527,96 @@ PathInfo generateDubinsPath(
     std::cout << "  Number of curves: " << result.curves.size() << std::endl;
 
     return result;
+}
+
+std::vector<Point> buildSafeWaypointsRRT(
+    const std::vector<std::pair<double, double>>& route,
+    double start_theta,
+    double end_theta,
+    double kmax,
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    const std::array<double, 4>& bounds) {
+
+    std::vector<Point> waypoints;
+
+    if (route.size() < 2) {
+        return waypoints;
+    }
+
+    const auto& config = getConfig();
+
+    std::cout << "Building safe waypoints using Informed RRT*..." << std::endl;
+
+    // For each segment in the route
+    for (size_t i = 0; i < route.size() - 1; ++i) {
+        double x1 = route[i].first, y1 = route[i].second;
+        double x2 = route[i + 1].first, y2 = route[i + 1].second;
+
+        // Determine headings for this segment
+        double theta1, theta2;
+        if (i == 0) {
+            theta1 = start_theta;
+        } else {
+            double dx = x1 - route[i - 1].first;
+            double dy = y1 - route[i - 1].second;
+            theta1 = std::atan2(dy, dx);
+        }
+
+        if (i == route.size() - 2) {
+            theta2 = end_theta;
+        } else {
+            double dx = x2 - x1;
+            double dy = y2 - y1;
+            theta2 = std::atan2(dy, dx);
+        }
+
+        Pose pose1 = {x1, y1, theta1};
+        Pose pose2 = {x2, y2, theta2};
+
+        // Check if direct Dubins collides
+        bool collides = directDubinsCollides(pose1, pose2, kmax, obstacles);
+
+        if (collides) {
+            std::cout << "  Segment " << i << " (" << x1 << "," << y1 << ") -> ("
+                      << x2 << "," << y2 << ") COLLIDES, running RRT*" << std::endl;
+
+            // Run Informed RRT*
+            InformedRRTStar rrt(obstacles, bounds);
+            rrt.setStepSize(config.rrt_step_size);
+
+            auto result = rrt.plan(
+                x1, y1, x2, y2,
+                config.rrt_max_iterations,
+                config.rrt_goal_radius);
+
+            if (result.found && result.path.size() > 2) {
+                // Smooth the RRT* path
+                auto smoothed = smoothRRTPath(result.path, obstacles, 50, 30);
+
+                std::cout << "    RRT* path: " << result.path.size() << " nodes"
+                          << " -> smoothed: " << smoothed.size() << " waypoints" << std::endl;
+
+                // Add intermediate waypoints (skip first and last)
+                for (size_t j = 1; j < smoothed.size() - 1; ++j) {
+                    waypoints.push_back({static_cast<float>(smoothed[j].first),
+                                        static_cast<float>(smoothed[j].second)});
+                }
+            } else {
+                std::cout << "    WARNING: RRT* failed to find path!" << std::endl;
+            }
+        } else {
+            std::cout << "  Segment " << i << " (" << x1 << "," << y1 << ") -> ("
+                      << x2 << "," << y2 << ") direct OK" << std::endl;
+        }
+
+        // Add the destination point (except for the last point which is the gate/end)
+        if (i < route.size() - 2) {
+            waypoints.push_back({static_cast<float>(x2), static_cast<float>(y2)});
+        }
+    }
+
+    std::cout << "  Total intermediate waypoints: " << waypoints.size() << std::endl;
+    return waypoints;
 }
 
 }  // namespace planning

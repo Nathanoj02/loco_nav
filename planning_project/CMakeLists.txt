@@ -148,6 +148,7 @@ add_executable(planning_node
   src/dubins.cpp
   src/multipoint_dubins.cpp
   src/math_utils.cpp
+  src/rrt_star.cpp
 )
 
 ## Rename C++ executable without prefix
