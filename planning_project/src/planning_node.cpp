@@ -112,6 +112,9 @@ public:
     }
 
     void clockCallback(const rosgraph_msgs::Clock::ConstPtr& msg) {
+        // TODO: Re-enable for actual simulation
+        return;
+
         if (!trajectory_ready_ || trajectory_.empty()) {
             return;
         }
@@ -349,11 +352,14 @@ public:
         dubins_path_ = planning::generateDubinsPath(
             start_pose, end_pose, waypoints, kmax, 8, 2);
 
-        // Sample trajectory and store for execution
-        sampleTrajectory();
+        // TODO: Re-enable for actual simulation
+        // sampleTrajectory();
+        // executePath();
 
-        // Execute the path
-        executePath();
+        // For now, just save trajectory data for offline analysis
+        saveTrajectoryToFile();
+        ROS_INFO("Planning complete. Trajectory saved. Shutting down.");
+        ros::shutdown();
     }
 
     std::array<double, 4> computeWorldBounds() {
