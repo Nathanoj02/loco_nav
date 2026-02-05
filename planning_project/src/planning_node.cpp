@@ -654,24 +654,6 @@ public:
         }
         file << "  ],\n";
 
-        // Save sampled trajectory points (subsample for file size)
-        int subsample = std::max(1, static_cast<int>(trajectory_.size() / 1000));
-        file << "  \"trajectory\": [\n";
-        for (size_t i = 0; i < trajectory_.size(); i += subsample) {
-            const auto& pt = trajectory_[i];
-            file << "    {\"x\": " << pt.x << ", \"y\": " << pt.y
-                 << ", \"theta\": " << pt.theta << ", \"time\": " << pt.time << "}";
-            if (i + subsample < trajectory_.size()) file << ",";
-            file << "\n";
-        }
-        // Always include the last point
-        if (subsample > 1 && !trajectory_.empty()) {
-            const auto& pt = trajectory_.back();
-            file << "    {\"x\": " << pt.x << ", \"y\": " << pt.y
-                 << ", \"theta\": " << pt.theta << ", \"time\": " << pt.time << "}\n";
-        }
-        file << "  ],\n";
-
         // Save statistics
         file << "  \"stats\": {\n";
         file << "    \"total_distance\": " << dubins_path_.cost << ",\n";
