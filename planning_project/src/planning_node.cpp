@@ -119,7 +119,7 @@ public:
         center.y = y;
         center.z = 0;
         robot_obs.polygon.points.push_back(center);
-        robot_obs.radius = planning::getConfig().totalInflation();
+        robot_obs.radius = planning::getConfig().robot_radius;  // physical size only; inflation added later
 
         other_robot_obstacles_.push_back(robot_obs);
         other_robots_registered_[robot_id] = true;
@@ -275,14 +275,27 @@ public:
 
         map_built_ = true;
 
+        // Merge other robots into obstacles (only once)
+        for (const auto& robot_obs : other_robot_obstacles_) {
+            obstacles_.obstacles.push_back(robot_obs);
+        }
+        other_robot_obstacles_.clear();  // prevent re-adding on rebuild
+
+        // Don't build yet - the retry loop in runPlanningWithRetry() will
+        // build with the appropriate safety margin
+        tryComputeDistanceMatrix();
+    }
+
+    // Builds (or rebuilds) the map using the current safety_margin in config.
+    void buildMapWithCurrentMargin() {
+        auto& config = planning::getConfig();
+        ROS_INFO("Building map with safety_margin=%.3f (total inflation=%.3f)",
+                 config.safety_margin, config.totalInflation());
+
         // Create grid from borders
         grid_map_ = std::make_unique<planning::GridMap>(borders_);
 
         // Inflate obstacles and mark them
-        // Merge other robots into obstacles before inflating
-        for (const auto& robot_obs : other_robot_obstacles_) {
-            obstacles_.obstacles.push_back(robot_obs);
-        }
         inflated_obstacles_ = planning::inflateObstacles(obstacles_);
         grid_map_->markObstacles(inflated_obstacles_);
 
@@ -291,7 +304,7 @@ public:
         grid_map_->markOutsideBorders(shrunk_borders);
 
         // Refine MIXED cells by recursive subdivision
-        const int refinement_depth = planning::getConfig().refinement_depth;
+        const int refinement_depth = config.refinement_depth;
         grid_map_->refineMixedCells(inflated_obstacles_, shrunk_borders, refinement_depth);
 
         // Save map to file for visualization
@@ -306,8 +319,6 @@ public:
         cell_graph_->buildFromGridMap(*grid_map_);
 
         ROS_INFO("Grid map built (%d nodes)", (int)cell_graph_->numNodes());
-
-        tryComputeDistanceMatrix();
     }
 
     void tryComputeDistanceMatrix() {
@@ -319,6 +330,11 @@ public:
         }
         distance_matrix_computed_ = true;
 
+        // Don't build/compute yet - the retry loop handles everything
+        trySolveOrienteering();
+    }
+
+    void computeDistanceMatrix() {
         // Build points list: [start, victim0, victim1, ..., gate]
         std::vector<std::pair<double, double>> points;
         std::vector<double> headings;
@@ -342,7 +358,6 @@ public:
             *cell_graph_, points, headings, inflated_obstacles_);
 
         ROS_INFO("Distance matrix computed (%lu victims)", victims_.size());
-        trySolveOrienteering();
     }
 
     void trySolveOrienteering() {
@@ -354,40 +369,68 @@ public:
         }
         orienteering_solved_ = true;
 
-        // Convert timeout to max distance (distance = velocity × time)
-        double velocity = planning::getConfig().robot_velocity;
-        double time_buffer = planning::getConfig().time_buffer_ratio;
-        double max_distance;
+        runPlanningWithRetry();
+    }
 
-        if (timeout_seconds_ <= 0) {
-            max_distance = 1e9;
-        } else {
-            double effective_time = timeout_seconds_ * (1.0 - time_buffer);
-            max_distance = effective_time * velocity;
-        }
+    // Retry loop: start with max safety margin, decrease on failure until path is found.
+    void runPlanningWithRetry() {
+        auto& config = planning::getConfig();
 
-        // Extract victim values
-        std::vector<double> victim_values;
-        for (const auto& v : victims_) {
-            victim_values.push_back(v.value);
-        }
+        for (double margin = config.max_safety_margin;
+             margin >= config.min_safety_margin - 1e-9;
+             margin -= config.margin_step)
+        {
+            config.safety_margin = std::max(margin, 0.0);
+            ROS_INFO("=== Attempting with safety_margin=%.3f (inflation=%.3f) ===",
+                     config.safety_margin, config.totalInflation());
 
-        // Solve orienteering problem
-        auto result = planning::solveOrienteering(distance_matrix_, victim_values, max_distance);
+            // Rebuild map and distance matrix with new margin
+            buildMapWithCurrentMargin();
+            computeDistanceMatrix();
 
-        if (result.feasible) {
+            // Solve orienteering
+            double velocity = config.robot_velocity;
+            double time_buffer = config.time_buffer_ratio;
+            double max_distance;
+
+            if (timeout_seconds_ <= 0) {
+                max_distance = 1e9;
+            } else {
+                double effective_time = timeout_seconds_ * (1.0 - time_buffer);
+                max_distance = effective_time * velocity;
+            }
+
+            std::vector<double> victim_values;
+            for (const auto& v : victims_) {
+                victim_values.push_back(v.value);
+            }
+
+            auto result = planning::solveOrienteering(distance_matrix_, victim_values, max_distance);
+
+            if (!result.feasible) {
+                ROS_WARN("No feasible route with safety_margin=%.3f, reducing...", config.safety_margin);
+                continue;
+            }
+
             chosen_route_ = result.route;
             ROS_INFO("Route: %lu victims, value=%.0f, dist=%.1fm (budget=%.1fm)",
                      chosen_route_.size(), result.total_value, result.total_distance, max_distance);
 
-            // Generate Dubins path
-            generatePath();
-        } else {
-            ROS_ERROR("No feasible route found! Cannot reach gate.");
+            // Try to generate path
+            if (generatePath()) {
+                ROS_INFO("Planning succeeded with safety_margin=%.3f", config.safety_margin);
+                return;
+            }
+
+            ROS_WARN("Path generation failed with safety_margin=%.3f, reducing...", config.safety_margin);
         }
+
+        ROS_ERROR("All safety margin attempts exhausted! No valid path found.");
+        ros::shutdown();
     }
 
-    void generatePath() {
+    // Returns true if path was generated successfully.
+    bool generatePath() {
         const auto& config = planning::getConfig();
         double kmax = 1.0 / config.dubins_rho;
 
@@ -426,6 +469,10 @@ public:
         dubins_path_ = planning::generateDubinsPath(
             start_pose, end_pose, waypoints, kmax, 8, 2);
 
+        if (dubins_path_.curves.empty()) {
+            return false;
+        }
+
         // TODO: Re-enable for actual simulation
         // sampleTrajectory();
         // executePath();
@@ -434,6 +481,7 @@ public:
         saveTrajectoryToFile();
         ROS_INFO("Planning complete. Trajectory saved. Shutting down.");
         ros::shutdown();
+        return true;
     }
 
     std::array<double, 4> computeWorldBounds() {

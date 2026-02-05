@@ -6,14 +6,18 @@ Usage:
     python3 plot_rrt.py ../results/rrt_tree.json
     python3 plot_rrt.py ../results/rrt_tree.json output.png
     python3 plot_rrt.py ../results/rrt_tree.json --show-all-edges
+    python3 plot_rrt.py ../results/rrt_tree.json --trajectory ../results/trajectory.json
 """
 
 import json
 import sys
+import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.collections import LineCollection
 import numpy as np
+
+from plot_map import load_trajectory, plot_trajectory_on_axes
 
 
 def load_rrt_data(filename):
@@ -22,7 +26,7 @@ def load_rrt_data(filename):
         return json.load(f)
 
 
-def plot_rrt(data, output_file=None, show_all_edges=True, show_smoothed=True):
+def plot_rrt(data, output_file=None, show_all_edges=True, show_smoothed=True, trajectory_data=None):
     """Plot RRT* tree visualization."""
     fig, ax = plt.subplots(1, 1, figsize=(14, 10))
 
@@ -101,6 +105,10 @@ def plot_rrt(data, output_file=None, show_all_edges=True, show_smoothed=True):
         ax.plot(route[i, 0], route[i, 1], 'o', color='orange', markersize=12, zorder=5)
         ax.annotate(f'V{i}', (route[i, 0], route[i, 1]), textcoords="offset points",
                    xytext=(5, 5), fontsize=9, color='orange')
+
+    # Overlay Dubins trajectory if provided
+    if trajectory_data is not None:
+        plot_trajectory_on_axes(ax, trajectory_data)
 
     # Statistics box
     stats_text = f'Segments: {len(data["segments"])}\n'
@@ -210,29 +218,55 @@ def plot_rrt_detailed(data, output_file=None):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 plot_rrt.py <rrt_tree.json> [output.png] [--show-all-edges] [--detailed]")
+        print("Usage: python3 plot_rrt.py <rrt_tree.json> [output.png] [--show-all-edges] [--detailed] [--trajectory trajectory.json]")
         sys.exit(1)
 
     json_file = sys.argv[1]
     output_file = None
     show_all_edges = True
     detailed = False
+    trajectory_file = None
 
-    for arg in sys.argv[2:]:
+    i = 2
+    while i < len(sys.argv):
+        arg = sys.argv[i]
         if arg == '--show-all-edges':
             show_all_edges = True
         elif arg == '--hide-edges':
             show_all_edges = False
         elif arg == '--detailed':
             detailed = True
+        elif arg == '--trajectory':
+            if i + 1 < len(sys.argv):
+                trajectory_file = sys.argv[i + 1]
+                i += 1
+            else:
+                print("Error: --trajectory requires a file path")
+                sys.exit(1)
         elif not arg.startswith('--'):
             output_file = arg
+        i += 1
+
+    # Load trajectory if provided
+    trajectory_data = None
+    if trajectory_file:
+        if not os.path.exists(trajectory_file):
+            print(f"Warning: Trajectory file not found: {trajectory_file}")
+        else:
+            print(f"Loading trajectory from: {trajectory_file}")
+            trajectory_data = load_trajectory(trajectory_file)
+            if 'stats' in trajectory_data:
+                stats = trajectory_data['stats']
+                print(f"  Distance: {stats['total_distance']:.2f} m, "
+                      f"Time: {stats['total_time']:.2f} s, "
+                      f"Victims: {stats['num_victims_visited']}")
 
     try:
         data = load_rrt_data(json_file)
         print(f"Loaded RRT* data: {len(data['segments'])} segments")
 
-        plot_rrt(data, output_file, show_all_edges=show_all_edges)
+        plot_rrt(data, output_file, show_all_edges=show_all_edges,
+                 trajectory_data=trajectory_data)
 
         if detailed:
             plot_rrt_detailed(data, output_file)
