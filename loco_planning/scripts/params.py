@@ -3,8 +3,8 @@ import numpy as np
 robot_params = {}
 
 robot_params['limo0'] ={'dt': 0.01,
-                         'k_p': 5.,
-                         'k_th': 2,
+                         'k_p': 20.,
+                         'k_th': 10.,
                         'joint_names': ['limo0/front_left_wheel', 'limo0/front_right_wheel', 'limo0/rear_left_wheel',  'limo0/rear_right_wheel' ],
                         'real_robot': False,
                         'buffer_size': 50000}
