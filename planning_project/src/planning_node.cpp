@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <map>
 
 class PathPlanner {
 public:
@@ -40,6 +41,8 @@ public:
         victims_sub_ = nh.subscribe("/victims", 1, &PathPlanner::victimsCallback, this);
         gates_sub_ = nh.subscribe("/gates", 1, &PathPlanner::gatesCallback, this);
         odom_sub_ = nh.subscribe("/limo0/odom", 1, &PathPlanner::odomCallback, this);
+        other_robot_subs_.push_back(nh.subscribe("/limo1/odom", 1, &PathPlanner::otherRobotCallback1, this));
+        other_robot_subs_.push_back(nh.subscribe("/limo2/odom", 1, &PathPlanner::otherRobotCallback2, this));
         timeout_sub_ = nh.subscribe("/victims_timeout", 1, &PathPlanner::timeoutCallback, this);
         clock_sub_ = nh.subscribe("/clock", 1, &PathPlanner::clockCallback, this);
 
@@ -101,6 +104,43 @@ public:
             odom_received_ = true;
             tryComputeDistanceMatrix();
         }
+    }
+
+    void registerOtherRobot(const nav_msgs::Odometry::ConstPtr& msg, int robot_id) {
+        if (other_robots_registered_[robot_id]) return;
+
+        double x = msg->pose.pose.position.x;
+        double y = msg->pose.pose.position.y;
+
+        // Store separately (obstacles_ gets overwritten by obstacleCallback)
+        obstacles_msgs::ObstacleMsg robot_obs;
+        geometry_msgs::Point32 center;
+        center.x = x;
+        center.y = y;
+        center.z = 0;
+        robot_obs.polygon.points.push_back(center);
+        robot_obs.radius = planning::getConfig().totalInflation();
+
+        other_robot_obstacles_.push_back(robot_obs);
+        other_robots_registered_[robot_id] = true;
+
+        ROS_INFO("Registered limo%d at (%.2f, %.2f) as obstacle", robot_id, x, y);
+        tryBuildMap();
+    }
+
+    bool allOtherRobotsReady() {
+        for (const auto& [id, registered] : other_robots_registered_) {
+            if (!registered) return false;
+        }
+        return true;
+    }
+
+    void otherRobotCallback1(const nav_msgs::Odometry::ConstPtr& msg) {
+        registerOtherRobot(msg, 1);
+    }
+
+    void otherRobotCallback2(const nav_msgs::Odometry::ConstPtr& msg) {
+        registerOtherRobot(msg, 2);
     }
 
     void timeoutCallback(const std_msgs::Int32::ConstPtr& msg) {
@@ -199,16 +239,50 @@ public:
         return {pose, pose};  // velocity is same as pose (v, omega fields)
     }
 
+    void detectOtherRobots() {
+        if (other_robots_checked_) return;
+        other_robots_checked_ = true;
+
+        // Query ROS master for all advertised topics
+        ros::master::V_TopicInfo topic_list;
+        ros::master::getTopics(topic_list);
+
+        for (const auto& [id, _] : other_robots_registered_) {
+            std::string topic = "/limo" + std::to_string(id) + "/odom";
+            bool found = false;
+            for (const auto& info : topic_list) {
+                if (info.name == topic) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                other_robots_registered_[id] = true;
+            }
+        }
+    }
+
     void tryBuildMap() {
         if (!borders_received_ || !obstacles_received_ || map_built_) {
             return;
         }
+
+        // First time: check which other robots exist
+        detectOtherRobots();
+
+        if (!allOtherRobotsReady()) return;
+
         map_built_ = true;
 
         // Create grid from borders
         grid_map_ = std::make_unique<planning::GridMap>(borders_);
 
         // Inflate obstacles and mark them
+        // Merge other robots into obstacles before inflating
+        for (const auto& robot_obs : other_robot_obstacles_) {
+            obstacles_.obstacles.push_back(robot_obs);
+        }
         inflated_obstacles_ = planning::inflateObstacles(obstacles_);
         grid_map_->markObstacles(inflated_obstacles_);
 
@@ -685,6 +759,10 @@ private:
     ros::Subscriber victims_sub_;
     ros::Subscriber gates_sub_;
     ros::Subscriber odom_sub_;
+    std::vector<ros::Subscriber> other_robot_subs_;
+    std::map<int, bool> other_robots_registered_ = {{1, false}, {2, false}};
+    std::vector<obstacles_msgs::ObstacleMsg> other_robot_obstacles_;
+    bool other_robots_checked_ = false;
     ros::Subscriber timeout_sub_;
 
     // Publisher
