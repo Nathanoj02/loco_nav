@@ -388,6 +388,22 @@ public:
             buildMapWithCurrentMargin();
             computeDistanceMatrix();
 
+            // Check if any victims are unreachable
+            if (config.safety_margin > config.victim_margin) {
+                size_t gate_idx = distance_matrix_.size() - 1;
+                bool has_unreachable = false;
+                for (size_t i = 1; i <= victims_.size(); ++i) {
+                    if (distance_matrix_[0][i] < 0 || distance_matrix_[i][gate_idx] < 0) {
+                        ROS_WARN("  Victim %lu unreachable at safety_margin=%.3f", i - 1, config.safety_margin);
+                        has_unreachable = true;
+                    }
+                }
+                if (has_unreachable) {
+                    ROS_WARN("Unreachable victims with safety_margin=%.3f, reducing...", config.safety_margin);
+                    continue;
+                }
+            }
+
             // Solve orienteering
             double velocity = config.robot_velocity;
             double time_buffer = config.time_buffer_ratio;
@@ -469,7 +485,7 @@ public:
         dubins_path_ = planning::generateDubinsPath(
             start_pose, end_pose, waypoints, kmax, inflated_obstacles_, 8, 2);
 
-        if (dubins_path_.curves.empty() || std::isinf(dubins_path_.cost)) {
+        if (dubins_path_.curves.empty() || dubins_path_.cost >= 1e30) {
             return false;
         }
 
