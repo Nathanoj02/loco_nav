@@ -1,6 +1,8 @@
 #ifndef DUBINS_HPP
 #define DUBINS_HPP
 
+#include <functional>
+
 /**
  * Point in 2D space
  */
@@ -48,5 +50,26 @@ typedef struct DubinsCurve {
  * @return The total length of the Dubins curve, or MAXFLOAT if no valid solution exists
  */
 float dubins_shortest_path(int &pidx, DubinsCurve &curve, Pose &start, Pose &end, float kmax);
+
+/**
+ * Collision checker type: returns true if the curve collides with obstacles
+ */
+using DubinsCollisionFn = std::function<bool(const DubinsCurve&)>;
+
+/**
+ * Find the shortest collision-free Dubins path among all 6 types.
+ * Tries all 6 primitives (LSL, RSR, LSR, RSL, RLR, LRL) and returns
+ * the shortest one that doesn't collide.
+ * @param[out] pidx Primitive index, or -1 if all collide
+ * @param[out] curve The collision-free Dubins curve
+ * @param[in] start Starting pose
+ * @param[in] end Ending pose
+ * @param[in] kmax Maximum curvature
+ * @param[in] collides Collision checking function
+ * @return Total length, or MAXFLOAT if no collision-free path
+ */
+float dubins_shortest_collision_free_path(
+    int &pidx, DubinsCurve &curve, Pose &start, Pose &end, float kmax,
+    const DubinsCollisionFn& collides);
 
 #endif // DUBINS_HPP

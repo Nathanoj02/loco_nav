@@ -308,21 +308,21 @@ DubinsResponse LRL(float scaled_theta0, float scaled_thetaf, float scaled_kmax) 
     return response;
 }
 
+// Common data shared by dubins_shortest_path and collision-free variant
+static DubinsFunc dubins_funcs[6] = {LSL, RSR, LSR, RSL, RLR, LRL};
+static float dubins_k_signs[6][3] = {
+    {1, 0, 1},   // LSL
+    {-1, 0, -1}, // RSR
+    {1, 0, -1},  // LSR
+    {-1, 0, 1},  // RSL
+    {-1, 1, -1}, // RLR
+    {1, -1, 1}   // LRL
+};
+
 float dubins_shortest_path(int &pidx, DubinsCurve &curve, Pose &start, Pose &end, float kmax) {
     // Compute params of standard scaled problem
     float scaled_theta0, scaled_thetaf, scaled_kmax, lambda;
     scaleToStandard(scaled_theta0, scaled_thetaf, scaled_kmax, lambda, start, end, kmax);
-
-    // Define the functions corresponding to the different primitives,
-    // and the corresponding curvature signs
-    DubinsFunc funcs[6] = {LSL, RSR, LSR, RSL, RLR, LRL};
-    float k_signs[6][3] = { {1, 0, 1},   // LSL
-                            {-1, 0, -1}, // RSR
-                            {1, 0, -1},  // LSR
-                            {-1, 0, 1},  // RSL
-                            {-1, 1, -1}, // RLR
-                            {1, -1, 1}   // LRL
-    };
 
     // Try all the possible primitives, to find the optimal solution
     pidx = -1;
@@ -332,7 +332,7 @@ float dubins_shortest_path(int &pidx, DubinsCurve &curve, Pose &start, Pose &end
     float s1 = 0, s2 = 0, s3 = 0;
 
     for (int i = 0; i < 6; i++) {
-        DubinsResponse res = funcs[i](scaled_theta0, scaled_thetaf, scaled_kmax);
+        DubinsResponse res = dubins_funcs[i](scaled_theta0, scaled_thetaf, scaled_kmax);
         Lcur = res.scaled_s1 + res.scaled_s2 + res.scaled_s3;
 
         if (res.ok && Lcur < L) {
@@ -351,15 +351,15 @@ float dubins_shortest_path(int &pidx, DubinsCurve &curve, Pose &start, Pose &end
 
         // Construct the Dubins curve with the computed optimal parameters
         curve = create_dubins_curve(start, s1, s2, s3,
-                                    k_signs[pidx][0] * kmax,
-                                    k_signs[pidx][1] * kmax,
-                                    k_signs[pidx][2] * kmax);
-        
+                                    dubins_k_signs[pidx][0] * kmax,
+                                    dubins_k_signs[pidx][1] * kmax,
+                                    dubins_k_signs[pidx][2] * kmax);
+
         // Check the correctness of the algorithm
         if (!check(scaled_s1, scaled_s2, scaled_s3,
-                   k_signs[pidx][0] * scaled_kmax,
-                   k_signs[pidx][1] * scaled_kmax,
-                   k_signs[pidx][2] * scaled_kmax,
+                   dubins_k_signs[pidx][0] * scaled_kmax,
+                   dubins_k_signs[pidx][1] * scaled_kmax,
+                   dubins_k_signs[pidx][2] * scaled_kmax,
                    scaled_theta0, scaled_thetaf)) {
             // Error
             pidx = -1;
@@ -367,6 +367,74 @@ float dubins_shortest_path(int &pidx, DubinsCurve &curve, Pose &start, Pose &end
         }
 
         return curve.total_length;  // Return actual length in meters
+    }
+
+    return MAXFLOAT;
+}
+
+float dubins_shortest_collision_free_path(
+    int &pidx, DubinsCurve &curve, Pose &start, Pose &end, float kmax,
+    const DubinsCollisionFn& collides) {
+
+    // Compute params of standard scaled problem
+    float scaled_theta0, scaled_thetaf, scaled_kmax, lambda;
+    scaleToStandard(scaled_theta0, scaled_thetaf, scaled_kmax, lambda, start, end, kmax);
+
+    // Collect all valid candidates sorted by length
+    struct Candidate {
+        int idx;
+        float scaled_s1, scaled_s2, scaled_s3;
+        float length;
+    };
+    Candidate candidates[6];
+    int num_candidates = 0;
+
+    for (int i = 0; i < 6; i++) {
+        DubinsResponse res = dubins_funcs[i](scaled_theta0, scaled_thetaf, scaled_kmax);
+        if (!res.ok) continue;
+
+        float Lcur = res.scaled_s1 + res.scaled_s2 + res.scaled_s3;
+
+        // Verify correctness
+        if (!check(res.scaled_s1, res.scaled_s2, res.scaled_s3,
+                   dubins_k_signs[i][0] * scaled_kmax,
+                   dubins_k_signs[i][1] * scaled_kmax,
+                   dubins_k_signs[i][2] * scaled_kmax,
+                   scaled_theta0, scaled_thetaf)) {
+            continue;
+        }
+
+        candidates[num_candidates++] = {i, res.scaled_s1, res.scaled_s2, res.scaled_s3, Lcur};
+    }
+
+    // Sort by length (insertion sort, max 6 elements)
+    for (int i = 1; i < num_candidates; i++) {
+        Candidate key = candidates[i];
+        int j = i - 1;
+        while (j >= 0 && candidates[j].length > key.length) {
+            candidates[j + 1] = candidates[j];
+            j--;
+        }
+        candidates[j + 1] = key;
+    }
+
+    // Try each candidate in order of length, return first collision-free one
+    pidx = -1;
+    for (int c = 0; c < num_candidates; c++) {
+        auto& cand = candidates[c];
+        float s1, s2, s3;
+        scaleFromStandard(s1, s2, s3, cand.scaled_s1, cand.scaled_s2, cand.scaled_s3, lambda);
+
+        DubinsCurve test_curve = create_dubins_curve(start, s1, s2, s3,
+                                    dubins_k_signs[cand.idx][0] * kmax,
+                                    dubins_k_signs[cand.idx][1] * kmax,
+                                    dubins_k_signs[cand.idx][2] * kmax);
+
+        if (!collides(test_curve)) {
+            pidx = cand.idx;
+            curve = test_curve;
+            return test_curve.total_length;
+        }
     }
 
     return MAXFLOAT;

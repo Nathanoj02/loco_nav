@@ -256,6 +256,63 @@ std::vector<std::pair<double, double>> simplifyPath(
     return simplified;
 }
 
+bool segmentCollisionFree(
+    double x1, double y1, double x2, double y2,
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    double sample_step) {
+
+    double dx = x2 - x1;
+    double dy = y2 - y1;
+    double dist = std::sqrt(dx * dx + dy * dy);
+    int num_checks = std::max(2, static_cast<int>(std::ceil(dist / sample_step)));
+
+    for (int i = 0; i <= num_checks; ++i) {
+        double t = static_cast<double>(i) / num_checks;
+        double x = x1 + t * dx;
+        double y = y1 + t * dy;
+
+        if (pointCollidesWithObstacles(x, y, obstacles)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<std::pair<double, double>> lineOfSightSimplify(
+    const std::vector<std::pair<double, double>>& waypoints,
+    const std::vector<geometry_msgs::Polygon>& obstacles) {
+
+    if (waypoints.size() <= 2) {
+        return waypoints;
+    }
+
+    std::vector<std::pair<double, double>> simplified;
+    simplified.push_back(waypoints[0]);
+
+    size_t current = 0;
+    while (current < waypoints.size() - 1) {
+        // Try to reach the farthest point directly (greedy skip)
+        size_t farthest = current + 1;
+
+        for (size_t j = waypoints.size() - 1; j > current + 1; --j) {
+            if (segmentCollisionFree(
+                    waypoints[current].first, waypoints[current].second,
+                    waypoints[j].first, waypoints[j].second,
+                    obstacles)) {
+                farthest = j;
+                break;
+            }
+        }
+
+        simplified.push_back(waypoints[farthest]);
+        current = farthest;
+    }
+
+    std::cout << "  Line-of-sight simplification: " << waypoints.size()
+              << " -> " << simplified.size() << " waypoints" << std::endl;
+    return simplified;
+}
+
 double computeDubinsPathLength(
     const std::vector<std::pair<double, double>>& waypoints,
     double start_theta,
@@ -477,8 +534,8 @@ std::vector<Point> buildSafeWaypoints(
             auto path_result = graph.findPath(x1, y1, x2, y2);
 
             if (path_result.found && path_result.waypoints.size() > 2) {
-                // Simplify and add intermediate waypoints (skip first and last)
-                auto simplified = simplifyPath(path_result.waypoints, 0.3);
+                // Aggressively simplify using line-of-sight pruning
+                auto simplified = lineOfSightSimplify(path_result.waypoints, obstacles);
 
                 for (size_t j = 1; j < simplified.size() - 1; ++j) {
                     waypoints.push_back({simplified[j].first, simplified[j].second});
@@ -503,6 +560,7 @@ PathInfo generateDubinsPath(
     const Pose& end,
     std::vector<Point>& intermediate_points,
     double kmax,
+    const std::vector<geometry_msgs::Polygon>& obstacles,
     int num_angles,
     int refine_steps) {
 
@@ -519,9 +577,15 @@ PathInfo generateDubinsPath(
                   << ", " << intermediate_points[i].y << ")" << std::endl;
     }
 
+    // Create collision checker that tests Dubins curves against obstacles
+    DubinsCollisionFn collision_checker = [&obstacles](const DubinsCurve& curve) -> bool {
+        return dubinsCurveCollides(curve, obstacles, 0.05);
+    };
+
     PathInfo result = multi_point_dubins_shortest_path(
         start_copy, end_copy, intermediate_points,
-        num_angles, static_cast<float>(kmax), refine_steps);
+        num_angles, static_cast<float>(kmax), refine_steps,
+        collision_checker);
 
     std::cout << "  Total path length: " << result.cost << " m" << std::endl;
     std::cout << "  Number of curves: " << result.curves.size() << std::endl;

@@ -467,9 +467,9 @@ public:
         Pose end_pose = {gate_x_, gate_y_, gate_theta_};
 
         dubins_path_ = planning::generateDubinsPath(
-            start_pose, end_pose, waypoints, kmax, 8, 2);
+            start_pose, end_pose, waypoints, kmax, inflated_obstacles_, 8, 2);
 
-        if (dubins_path_.curves.empty()) {
+        if (dubins_path_.curves.empty() || std::isinf(dubins_path_.cost)) {
             return false;
         }
 

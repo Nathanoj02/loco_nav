@@ -110,6 +110,36 @@ std::vector<std::pair<double, double>> simplifyPath(
     double angle_threshold = 0.1);
 
 /**
+ * @brief Check if a straight-line segment is collision-free.
+ *
+ * Samples points along the segment and checks against obstacle polygons.
+ *
+ * @param x1, y1 Start of segment
+ * @param x2, y2 End of segment
+ * @param obstacles Inflated obstacle polygons
+ * @param sample_step Distance between collision check samples
+ * @return true if segment is collision-free
+ */
+bool segmentCollisionFree(
+    double x1, double y1, double x2, double y2,
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    double sample_step = 0.05);
+
+/**
+ * @brief Simplify a path using line-of-sight pruning.
+ *
+ * Greedily skips intermediate waypoints when a direct collision-free
+ * line segment exists. Much more aggressive than angle-based simplification.
+ *
+ * @param waypoints Original waypoints from A*
+ * @param obstacles Inflated obstacle polygons
+ * @return Simplified waypoint list (typically much shorter)
+ */
+std::vector<std::pair<double, double>> lineOfSightSimplify(
+    const std::vector<std::pair<double, double>>& waypoints,
+    const std::vector<geometry_msgs::Polygon>& obstacles);
+
+/**
  * @brief Compute Dubins path length through a sequence of waypoints.
  *
  * @param waypoints Sequence of (x, y) waypoints
@@ -222,6 +252,7 @@ std::vector<Point> buildSafeWaypoints(
  * @param end End pose (gate)
  * @param intermediate_points Safe waypoints from buildSafeWaypoints
  * @param kmax Maximum curvature
+ * @param obstacles Inflated obstacles for collision checking
  * @param num_angles Number of angle discretizations for DP (default 8)
  * @param refine_steps Refinement iterations (default 2)
  * @return PathInfo containing all Dubins curves
@@ -231,6 +262,7 @@ PathInfo generateDubinsPath(
     const Pose& end,
     std::vector<Point>& intermediate_points,
     double kmax,
+    const std::vector<geometry_msgs::Polygon>& obstacles,
     int num_angles = 8,
     int refine_steps = 2);
 

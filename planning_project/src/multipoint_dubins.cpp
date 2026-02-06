@@ -59,12 +59,13 @@ void refine_graph_matrix(Matrix<Pose> &matrix, PathInfo &path, int num_angles, i
  * @return A PathInfo struct containing the minimum cost path information
  */
 PathInfo multipoint_dubins_cost(
-    int column, Matrix<Pose>& graph_matrix, 
+    int column, Matrix<Pose>& graph_matrix,
     Pose &end, Pose &start_absolute, float kmax,
-    std::unordered_map<std::string, PathInfo> &memo
+    std::unordered_map<std::string, PathInfo> &memo,
+    const DubinsCollisionFn& collision_checker
 ) {
     // Memoization
-    std::string key = std::to_string(column) + "_" + std::to_string(end.x) + "_" 
+    std::string key = std::to_string(column) + "_" + std::to_string(end.x) + "_"
                         + std::to_string(end.y) + "_" + std::to_string(end.theta);
 
     if (memo.find(key) != memo.end()) {
@@ -72,13 +73,18 @@ PathInfo multipoint_dubins_cost(
     }
 
     PathInfo result;
-    
+
     // Base case: direct path from start to first column of points
     if (column == -1) {
         result.pids.resize(1);
         result.curves.resize(1);
-        result.cost = dubins_shortest_path(result.pids[0], result.curves[0], 
-                                          start_absolute, end, kmax);
+        if (collision_checker) {
+            result.cost = dubins_shortest_collision_free_path(
+                result.pids[0], result.curves[0], start_absolute, end, kmax, collision_checker);
+        } else {
+            result.cost = dubins_shortest_path(result.pids[0], result.curves[0],
+                                              start_absolute, end, kmax);
+        }
 
         memo[key] = result; // Store in memo
 
@@ -97,12 +103,21 @@ PathInfo multipoint_dubins_cost(
         // Cost from mid to end
         int temp_pidx;
         DubinsCurve temp_curve;
-        float cost_to_end = dubins_shortest_path(temp_pidx, temp_curve, mid, end, kmax);
-        
+        float cost_to_end;
+        if (collision_checker) {
+            cost_to_end = dubins_shortest_collision_free_path(
+                temp_pidx, temp_curve, mid, end, kmax, collision_checker);
+        } else {
+            cost_to_end = dubins_shortest_path(temp_pidx, temp_curve, mid, end, kmax);
+        }
+
+        if (cost_to_end >= MAXFLOAT) continue; // No valid collision-free path for this angle
+
         // Recursive cost from start to mid
-        PathInfo path_to_mid = multipoint_dubins_cost(column - 1, graph_matrix, 
-                                                      mid, start_absolute, kmax, memo);
-        
+        PathInfo path_to_mid = multipoint_dubins_cost(column - 1, graph_matrix,
+                                                      mid, start_absolute, kmax, memo,
+                                                      collision_checker);
+
         float total_cost = path_to_mid.cost + cost_to_end;
 
         if (total_cost < min_cost) {
@@ -119,7 +134,7 @@ PathInfo multipoint_dubins_cost(
     result.curves = best_path.curves;
     result.pids.push_back(best_pidx);
     result.curves.push_back(best_curve);
-    
+
     // Store in memo
     memo[key] = result;
 
@@ -128,7 +143,8 @@ PathInfo multipoint_dubins_cost(
 
 
 PathInfo multi_point_dubins_shortest_path(
-    Pose start, Pose end, std::vector<Point> &points, int num_angles, float kmax, int refine_steps
+    Pose start, Pose end, std::vector<Point> &points, int num_angles, float kmax, int refine_steps,
+    DubinsCollisionFn collision_checker
 ) {
     Matrix<Pose> graph_matrix = construct_graph_matrix(points, num_angles);
     std::unordered_map<std::string, PathInfo> memo;
@@ -137,8 +153,9 @@ PathInfo multi_point_dubins_shortest_path(
 
     for (int i = 0; i < refine_steps; i++) {
         memo.clear(); // Clear memoization for each refinement step
-        
-        result = multipoint_dubins_cost(graph_matrix.size() - 1, graph_matrix, end, start, kmax, memo);
+
+        result = multipoint_dubins_cost(graph_matrix.size() - 1, graph_matrix, end, start, kmax, memo,
+                                        collision_checker);
 
         if (i == refine_steps - 1) {
             break; // No need to refine on last iteration

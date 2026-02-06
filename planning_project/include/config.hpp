@@ -11,7 +11,7 @@ enum class PlannerType {
 
 struct Config {
     // Planner selection
-    PlannerType planner_type = PlannerType::SAMPLING;
+    PlannerType planner_type = PlannerType::COMBINATORIAL;
 
     // Grid parameters (for combinatorial)
     double grid_resolution = 0.5;       // meters per cell
