@@ -14,7 +14,7 @@ class RRTPlanner(PlannerBase):
     def __init__(self, robot_radius=0.2, v_max=0.1, curvature_max=0.1, robot_name="limo0", debug = False):
         super().__init__(robot_radius, v_max, curvature_max, robot_name="limo0", debug = False)
         self.params = RRTPlannerParams(robot_radius=0.2, v_max=0.1, curvature_max=0.1)
-        self.REFERENCE_TYPE = 'PIECE_WISE' #'PIECE_WISE', 'DUBINS' , 'DUBINS_MULTIPOINT'
+        self.REFERENCE_TYPE = 'DUBINS_MULTIPOINT' #'PIECE_WISE', 'DUBINS' , 'DUBINS_MULTIPOINT'
 
     def plan_path(self):
         rospy.loginfo("Running RRT...")
@@ -40,7 +40,7 @@ class RRTPlanner(PlannerBase):
 
 # ---------- Main ----------
 if __name__ == "__main__":
-    planner = PlannerBase(robot_radius=0.2, v_max=0.3, curvature_max=3., robot_name="limo0", debug=False)
+    planner = PlannerBase(robot_radius=0.2, v_max=0.3, curvature_max=1/0.35, robot_name="limo0", debug=False)
     planner.ros_init(start_simulation=False)
 
     while not rospy.is_shutdown():
