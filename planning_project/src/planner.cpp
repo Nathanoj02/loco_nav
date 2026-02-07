@@ -347,7 +347,66 @@ bool Planner::saveMapToFile(const std::string& filepath) const {
     if (!grid_map_) {
         return false;
     }
-    return grid_map_->saveToFile(filepath);
+
+    std::ofstream file(filepath);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    file << std::fixed << std::setprecision(6);
+
+    // Write JSON header
+    file << "{\n";
+    file << "  \"resolution\": " << grid_map_->getResolution() << ",\n";
+
+    auto bounds = grid_map_->getBounds();
+    file << "  \"bounds\": {\n";
+    file << "    \"min_x\": " << bounds[0] << ",\n";
+    file << "    \"min_y\": " << bounds[1] << ",\n";
+    file << "    \"max_x\": " << bounds[2] << ",\n";
+    file << "    \"max_y\": " << bounds[3] << "\n";
+    file << "  },\n";
+
+    auto grid_size = grid_map_->getGridSize();
+    file << "  \"grid_size\": {\"width\": " << grid_size.first << ", \"height\": " << grid_size.second << "},\n";
+    file << "  \"refined\": " << (grid_map_->isRefined() ? "true" : "false") << ",\n";
+
+    // Write cells
+    file << "  \"cells\": [\n";
+    const auto& cells = grid_map_->getLeafCells();
+    for (size_t i = 0; i < cells.size(); ++i) {
+        const auto& cell = cells[i];
+        const char* state_str = (cell.state == CellState::FREE) ? "free" :
+                               (cell.state == CellState::OCCUPIED) ? "occupied" : "mixed";
+
+        file << "    {\"x0\": " << cell.x0 << ", \"y0\": " << cell.y0
+             << ", \"x1\": " << cell.x1 << ", \"y1\": " << cell.y1
+             << ", \"state\": \"" << state_str << "\", \"depth\": " << cell.depth << "}";
+
+        if (i < cells.size() - 1) file << ",";
+        file << "\n";
+    }
+    file << "  ],\n";
+
+    // Write original obstacles (non-inflated)
+    file << "  \"original_obstacles\": [\n";
+    for (size_t i = 0; i < obstacles_.obstacles.size(); ++i) {
+        const auto& obs = obstacles_.obstacles[i];
+        file << "    [";
+        for (size_t j = 0; j < obs.polygon.points.size(); ++j) {
+            file << "[" << obs.polygon.points[j].x << ", " << obs.polygon.points[j].y << "]";
+            if (j < obs.polygon.points.size() - 1) file << ", ";
+        }
+        file << "]";
+        if (i < obstacles_.obstacles.size() - 1) file << ",";
+        file << "\n";
+    }
+    file << "  ]\n";
+
+    file << "}\n";
+    file.close();
+
+    return true;
 }
 
 bool Planner::saveTrajectoryToFile(const std::string& filepath) const {
@@ -452,6 +511,16 @@ std::vector<Point> Planner::buildSafeWaypointsRRTWithSave(
     file << "  \"bounds\": {\"min_x\": " << bounds[0] << ", \"max_x\": " << bounds[1]
          << ", \"min_y\": " << bounds[2] << ", \"max_y\": " << bounds[3] << "},\n";
 
+    // Save border (world boundaries)
+    file << "  \"border\": [\n";
+    const auto& border = (shrunk_borders_.points.empty()) ? borders_.points : shrunk_borders_.points;
+    for (size_t i = 0; i < border.size(); ++i) {
+        file << "    [" << border[i].x << ", " << border[i].y << "]";
+        if (i < border.size() - 1) file << ",";
+        file << "\n";
+    }
+    file << "  ],\n";
+
     // Save route points
     file << "  \"route\": [\n";
     for (size_t i = 0; i < route.size(); ++i) {
@@ -461,7 +530,7 @@ std::vector<Point> Planner::buildSafeWaypointsRRTWithSave(
     }
     file << "  ],\n";
 
-    // Save obstacles
+    // Save inflated obstacles
     file << "  \"obstacles\": [\n";
     for (size_t i = 0; i < inflated_obstacles_.size(); ++i) {
         file << "    [";
@@ -471,6 +540,21 @@ std::vector<Point> Planner::buildSafeWaypointsRRTWithSave(
         }
         file << "]";
         if (i < inflated_obstacles_.size() - 1) file << ",";
+        file << "\n";
+    }
+    file << "  ],\n";
+
+    // Save original obstacles (non-inflated)
+    file << "  \"original_obstacles\": [\n";
+    for (size_t i = 0; i < obstacles_.obstacles.size(); ++i) {
+        const auto& obs = obstacles_.obstacles[i];
+        file << "    [";
+        for (size_t j = 0; j < obs.polygon.points.size(); ++j) {
+            file << "[" << obs.polygon.points[j].x << ", " << obs.polygon.points[j].y << "]";
+            if (j < obs.polygon.points.size() - 1) file << ", ";
+        }
+        file << "]";
+        if (i < obstacles_.obstacles.size() - 1) file << ",";
         file << "\n";
     }
     file << "  ],\n";

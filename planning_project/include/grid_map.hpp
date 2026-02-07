@@ -122,6 +122,14 @@ public:
     const std::vector<Cell>& getLeafCells() const { return leaf_cells_; }
 
     /**
+     * @brief Getters for map properties.
+     */
+    double getResolution() const { return resolution_; }
+    std::array<double, 4> getBounds() const { return {min_x_, min_y_, max_x_, max_y_}; }
+    std::pair<int, int> getGridSize() const { return {width_, height_}; }
+    bool isRefined() const { return cells_refined_; }
+
+    /**
      * @brief Save map to file for visualization.
      *
      * Saves grid map data (leaf cells with state, bounds, depth) to a JSON file.

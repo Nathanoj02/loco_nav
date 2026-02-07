@@ -39,13 +39,34 @@ def plot_rrt(data, output_file=None, show_all_edges=True, show_smoothed=True, tr
     ax.set_ylabel('Y (m)')
     ax.set_title('Informed RRT* Path Planning')
 
-    # Plot obstacles
-    for obs_points in data.get('obstacles', []):
+    # Plot borders (world boundaries) if available
+    if 'border' in data:
+        border = data['border']
+        if len(border) >= 3:
+            border_polygon = patches.Polygon(border, closed=True,
+                                            fill=False, edgecolor='black',
+                                            linewidth=3, linestyle='--',
+                                            label='World Border')
+            ax.add_patch(border_polygon)
+
+    # Plot obstacles (inflated)
+    for i, obs_points in enumerate(data.get('obstacles', [])):
         if len(obs_points) >= 3:
             polygon = patches.Polygon(obs_points, closed=True,
                                        facecolor='gray', edgecolor='black',
-                                       alpha=0.7, linewidth=1)
+                                       alpha=0.7, linewidth=1,
+                                       label='Inflated Obstacles' if i == 0 else '')
             ax.add_patch(polygon)
+
+    # Plot original obstacles (non-inflated outlines)
+    if 'original_obstacles' in data:
+        for i, obs_points in enumerate(data['original_obstacles']):
+            if len(obs_points) >= 3:
+                polygon = patches.Polygon(obs_points, closed=True,
+                                         fill=False, edgecolor='red',
+                                         linewidth=2, linestyle='-',
+                                         label='Original Obstacles' if i == 0 else '')
+                ax.add_patch(polygon)
 
     # Color map for different segments
     colors = plt.cm.tab10(np.linspace(0, 1, len(data['segments'])))
@@ -76,13 +97,13 @@ def plot_rrt(data, output_file=None, show_all_edges=True, show_smoothed=True, tr
         if segment.get('path') and len(segment['path']) > 1:
             path = np.array(segment['path'])
             ax.plot(path[:, 0], path[:, 1], '-', color=color, linewidth=1.5,
-                    alpha=0.5, label=f'Seg {seg_idx} raw' if seg_idx == 0 else '')
+                    alpha=0.5)  # No label - will be shown by Dubins overlay
 
         # Plot smoothed path (thicker)
         if show_smoothed and segment.get('smoothed') and len(segment['smoothed']) > 1:
             smoothed = np.array(segment['smoothed'])
             ax.plot(smoothed[:, 0], smoothed[:, 1], '-', color=color,
-                    linewidth=3, alpha=0.9, label=f'Seg {seg_idx} smooth' if seg_idx == 0 else '')
+                    linewidth=3, alpha=0.9)  # No label - will be shown by Dubins overlay
 
         # Plot start and goal of segment
         if segment['direct']:
@@ -90,25 +111,27 @@ def plot_rrt(data, output_file=None, show_all_edges=True, show_smoothed=True, tr
             ax.plot([start[0], goal[0]], [start[1], goal[1]], '--',
                     color='green', linewidth=2, alpha=0.7)
 
-    # Plot route points
-    route = np.array(data['route'])
-    ax.plot(route[:, 0], route[:, 1], 'o', color='blue', markersize=10, zorder=5)
+    # Only show route points if no trajectory overlay (avoid duplication)
+    if trajectory_data is None:
+        # Plot route points
+        route = np.array(data['route'])
+        ax.plot(route[:, 0], route[:, 1], 'o', color='blue', markersize=10, zorder=5)
 
-    # Mark start and goal
-    ax.plot(route[0, 0], route[0, 1], 's', color='green', markersize=15,
-            label='Start', zorder=6)
-    ax.plot(route[-1, 0], route[-1, 1], '*', color='red', markersize=20,
-            label='Goal', zorder=6)
+        # Mark start and goal
+        ax.plot(route[0, 0], route[0, 1], 's', color='green', markersize=15,
+                label='Start', zorder=6)
+        ax.plot(route[-1, 0], route[-1, 1], '*', color='red', markersize=20,
+                label='Goal', zorder=6)
 
-    # Mark intermediate waypoints (victims)
-    for i in range(1, len(route) - 1):
-        ax.plot(route[i, 0], route[i, 1], 'o', color='orange', markersize=12, zorder=5)
-        ax.annotate(f'V{i}', (route[i, 0], route[i, 1]), textcoords="offset points",
-                   xytext=(5, 5), fontsize=9, color='orange')
+        # Mark intermediate waypoints (victims)
+        for i in range(1, len(route) - 1):
+            ax.plot(route[i, 0], route[i, 1], 'o', color='orange', markersize=12, zorder=5)
+            ax.annotate(f'V{i}', (route[i, 0], route[i, 1]), textcoords="offset points",
+                       xytext=(5, 5), fontsize=9, color='orange')
 
     # Overlay Dubins trajectory if provided
     if trajectory_data is not None:
-        plot_trajectory_on_axes(ax, trajectory_data)
+        plot_trajectory_on_axes(ax, trajectory_data, show_labels=True)
 
     # Statistics box
     stats_text = f'Segments: {len(data["segments"])}\n'

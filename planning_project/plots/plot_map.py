@@ -35,22 +35,25 @@ def load_trajectory(filename):
     return data
 
 
-def plot_trajectory_on_axes(ax, traj_data):
+def plot_trajectory_on_axes(ax, traj_data, show_labels=True):
     """
     Plot trajectory, waypoints, and Dubins curves on existing axes.
 
     Args:
         ax: Matplotlib axes object
         traj_data: Dictionary containing trajectory data from JSON
+        show_labels: Whether to include labels in legend (set False to avoid duplicates)
     """
     # Plot trajectory path
     if 'trajectory' in traj_data and len(traj_data['trajectory']) > 0:
         traj_points = traj_data['trajectory']
         traj_x = [pt['x'] for pt in traj_points]
         traj_y = [pt['y'] for pt in traj_points]
-        ax.plot(traj_x, traj_y, 'b-', linewidth=2, alpha=0.7, label='Dubins Path', zorder=10)
+        label = 'Dubins Path' if show_labels else None
+        ax.plot(traj_x, traj_y, 'b-', linewidth=2, alpha=0.7, label=label, zorder=10)
 
     # Plot Dubins arcs (show individual arc segments)
+    dubins_label_added = False
     if 'dubins_curves' in traj_data:
         for curve in traj_data['dubins_curves']:
             for arc in curve['arcs']:
@@ -84,7 +87,12 @@ def plot_trajectory_on_axes(ax, traj_data):
                             theta += dtheta
 
                 # Plot arc segment with different style (thinner, lighter)
-                ax.plot(arc_x, arc_y, 'c-', linewidth=1, alpha=0.3, zorder=9)
+                # Add label only once
+                label = None
+                if show_labels and not dubins_label_added:
+                    label = 'Dubins Path'
+                    dubins_label_added = True
+                ax.plot(arc_x, arc_y, 'c-', linewidth=1, alpha=0.3, label=label, zorder=9)
 
     # Plot victims
     if 'victims' in traj_data:
@@ -100,19 +108,22 @@ def plot_trajectory_on_axes(ax, traj_data):
                 unvisited_y.append(victim['y'])
 
         if visited_x:
+            label = 'Visited Victims' if show_labels else None
             ax.scatter(visited_x, visited_y, c='lime', s=150, marker='o',
-                      edgecolors='darkgreen', linewidths=2, label='Visited Victims',
+                      edgecolors='darkgreen', linewidths=2, label=label,
                       zorder=12)
         if unvisited_x:
+            label = 'Unvisited Victims' if show_labels else None
             ax.scatter(unvisited_x, unvisited_y, c='lightcoral', s=100, marker='o',
-                      edgecolors='darkred', linewidths=1.5, label='Unvisited Victims',
+                      edgecolors='darkred', linewidths=1.5, label=label,
                       zorder=11, alpha=0.6)
 
     # Plot start position
     if 'start' in traj_data:
         start = traj_data['start']
+        label = 'Start' if show_labels else None
         ax.scatter(start['x'], start['y'], c='blue', s=200, marker='s',
-                  edgecolors='darkblue', linewidths=2, label='Start', zorder=13)
+                  edgecolors='darkblue', linewidths=2, label=label, zorder=13)
         # Draw orientation arrow
         arrow_len = 0.5
         dx = arrow_len * np.cos(start['theta'])
@@ -123,8 +134,9 @@ def plot_trajectory_on_axes(ax, traj_data):
     # Plot goal position
     if 'goal' in traj_data:
         goal = traj_data['goal']
+        label = 'Goal (Gate)' if show_labels else None
         ax.scatter(goal['x'], goal['y'], c='red', s=200, marker='*',
-                  edgecolors='darkred', linewidths=2, label='Goal (Gate)', zorder=13)
+                  edgecolors='darkred', linewidths=2, label=label, zorder=13)
         # Draw orientation arrow
         arrow_len = 0.5
         dx = arrow_len * np.cos(goal['theta'])
@@ -210,7 +222,7 @@ def plot_map(map_data, output_file=None, show=True, trajectory_data=None):
                                              facecolor=colors['occupied'],
                                              edgecolor=edge_colors['occupied'],
                                              linewidth=0.3,
-                                             label=f'Occupied ({len(occupied_cells)})')
+                                             label=f'Obstacles (Inflated) ({len(occupied_cells)})')
         ax.add_collection(occupied_collection)
 
     if mixed_cells:
@@ -220,6 +232,16 @@ def plot_map(map_data, output_file=None, show=True, trajectory_data=None):
                                           linewidth=0.3,
                                           label=f'Mixed ({len(mixed_cells)})')
         ax.add_collection(mixed_collection)
+
+    # Plot original obstacles (non-inflated outlines)
+    if 'original_obstacles' in map_data:
+        for i, obs_points in enumerate(map_data['original_obstacles']):
+            if len(obs_points) >= 3:
+                polygon = patches.Polygon(obs_points, closed=True,
+                                         fill=False, edgecolor='red',
+                                         linewidth=2, linestyle='-',
+                                         label='Original Obstacles' if i == 0 else '')
+                ax.add_patch(polygon)
 
     # Set axis properties
     ax.set_xlim(min_x - 0.5, max_x + 0.5)
@@ -243,8 +265,16 @@ def plot_map(map_data, output_file=None, show=True, trajectory_data=None):
         title += ' + Dubins Path'
     ax.set_title(title, fontsize=14, fontweight='bold')
 
-    # Legend
-    ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
+    # Legend - manually add handles for PatchCollections
+    from matplotlib.patches import Patch
+    handles, labels = ax.get_legend_handles_labels()
+
+    # Add obstacles patch to legend (only if occupied cells exist)
+    if occupied_cells:
+        handles.insert(0, Patch(facecolor=colors['occupied'], edgecolor=edge_colors['occupied'],
+                               label='Obstacles (Inflated)'))
+
+    ax.legend(handles=handles, loc='upper right', fontsize=10, framealpha=0.9)
 
     # Add map info text
     info_text = f"Grid size: {map_data['grid_size']['width']}x{map_data['grid_size']['height']}\n"
@@ -319,6 +349,16 @@ def plot_map_with_depth(map_data, output_file=None, show=True, trajectory_data=N
                                 facecolor=color, edgecolor=edgecolor,
                                 linewidth=0.3, alpha=0.8)
         ax.add_patch(rect)
+
+    # Plot original obstacles (non-inflated outlines)
+    if 'original_obstacles' in map_data:
+        for i, obs_points in enumerate(map_data['original_obstacles']):
+            if len(obs_points) >= 3:
+                polygon = patches.Polygon(obs_points, closed=True,
+                                         fill=False, edgecolor='red',
+                                         linewidth=2, linestyle='-',
+                                         label='Original Obstacles' if i == 0 else '')
+                ax.add_patch(polygon)
 
     # Set axis properties
     ax.set_xlim(min_x - 0.5, max_x + 0.5)
