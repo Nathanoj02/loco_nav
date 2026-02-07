@@ -41,6 +41,13 @@ void ROSInterface::setPlannerType(PlannerType type) {
     config.planner_type = type;
 }
 
+void ROSInterface::setDebugMode(bool debug) {
+    debug_mode_ = debug;
+    if (debug_mode_) {
+        ROS_INFO("Debug mode enabled - trajectory execution disabled");
+    }
+}
+
 void ROSInterface::run() {
     ros::spin();
 }
@@ -120,10 +127,7 @@ void ROSInterface::timeoutCallback(const std_msgs::Int32::ConstPtr& msg) {
 }
 
 void ROSInterface::clockCallback(const rosgraph_msgs::Clock::ConstPtr& msg) {
-    // TODO: Re-enable for actual simulation
-    return;
-
-    if (!trajectory_ready_ || planner_->getTrajectory().empty()) {
+    if (debug_mode_ || !trajectory_ready_ || planner_->getTrajectory().empty()) {
         return;
     }
 
@@ -153,6 +157,7 @@ void ROSInterface::clockCallback(const rosgraph_msgs::Clock::ConstPtr& msg) {
     if (elapsed >= planner_->getTotalTime() && !execution_complete_) {
         execution_complete_ = true;
         ROS_INFO("Execution complete (%.2f sec)", elapsed);
+        ros::shutdown();
     }
 }
 
@@ -362,9 +367,12 @@ void ROSInterface::runPlanningWithRetry() {
                  path_time_ms, planner_->getTotalDistance(),
                  planner_->getNumVictimsVisited(), config.safety_margin);
 
-        // TODO: Re-enable for actual simulation
-        // planner_->sampleTrajectory();
-        // trajectory_ready_ = true;
+        // Sample trajectory for execution (unless in debug mode)
+        if (!debug_mode_) {
+            planner_->sampleTrajectory();
+            trajectory_ready_ = true;
+            ROS_INFO("Trajectory sampled and ready for execution");
+        }
 
         // Save results
         std::string traj_file = pkg_path + "/results/trajectory.json";
@@ -389,7 +397,14 @@ void ROSInterface::runPlanningWithRetry() {
         ROS_INFO("  TOTAL:             %8.2f ms", total_time_ms);
         ROS_INFO("========================================");
 
-        ros::shutdown();
+        if (debug_mode_) {
+            // Debug mode: shutdown immediately after planning
+            ROS_INFO("Debug mode - shutting down");
+            ros::shutdown();
+        } else {
+            // Normal mode: keep running to execute trajectory
+            ROS_INFO("Starting trajectory execution...");
+        }
         return;
     }
 

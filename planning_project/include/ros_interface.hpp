@@ -31,6 +31,11 @@ public:
     void setPlannerType(PlannerType type);
 
     /**
+     * @brief Set debug mode (disables trajectory execution).
+     */
+    void setDebugMode(bool debug);
+
+    /**
      * @brief Start ROS event loop.
      */
     void run();
@@ -94,6 +99,7 @@ private:
     bool map_built_ = false;
     bool distance_matrix_computed_ = false;
     bool orienteering_solved_ = false;
+    bool debug_mode_ = false;
 
     // ========================================================================
     // Other Robots

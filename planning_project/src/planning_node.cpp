@@ -9,16 +9,18 @@
  * Usage:
  *   rosrun planning_project planning_node --mode combinatorial
  *   rosrun planning_project planning_node --mode sampling
+ *   rosrun planning_project planning_node --mode sampling --debug
  */
 int main(int argc, char** argv) {
     ros::init(argc, argv, "planning_node");
 
-    // Parse --mode flag
+    // Parse command-line flags
     planning::PlannerType planner_type = planning::PlannerType::COMBINATORIAL;  // default
+    bool debug_mode = false;
 
-    for (int i = 1; i < argc - 1; ++i) {
+    for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
-        if (arg == "--mode") {
+        if (arg == "--mode" && i + 1 < argc) {
             std::string mode(argv[i + 1]);
             if (mode == "sampling") {
                 planner_type = planning::PlannerType::SAMPLING;
@@ -29,12 +31,15 @@ int main(int argc, char** argv) {
             } else {
                 ROS_WARN("Unknown mode '%s', using default: combinatorial", mode.c_str());
             }
-            break;
+            ++i;  // skip next argument
+        } else if (arg == "--debug") {
+            debug_mode = true;
         }
     }
 
     planning::ROSInterface interface;
     interface.setPlannerType(planner_type);
+    interface.setDebugMode(debug_mode);
     interface.run();
 
     return 0;
