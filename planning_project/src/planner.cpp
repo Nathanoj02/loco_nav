@@ -3,6 +3,7 @@
 #include "rrt_star.hpp"
 #include "orienteering.hpp"
 #include "config.hpp"
+#include <ros/package.h>
 #include <fstream>
 #include <iomanip>
 #include <algorithm>
@@ -179,8 +180,10 @@ bool Planner::generatePath() {
     if (config.planner_type == PlannerType::SAMPLING) {
         // Use Informed RRT* (sampling-based approach)
         std::array<double, 4> bounds = computeWorldBounds();
-        waypoints = buildSafeWaypointsRRT(
-            route, robot_theta_, gate_theta_, kmax, inflated_obstacles_, bounds, &shrunk_borders_);
+        std::string pkg_path = ros::package::getPath("planning-project");
+        std::string rrt_file = pkg_path + "/results/rrt_tree.json";
+        waypoints = buildSafeWaypointsRRTWithSave(
+            route, robot_theta_, gate_theta_, kmax, bounds, rrt_file);
     } else {
         // Use A* on grid (combinatorial approach - default)
         waypoints = buildSafeWaypoints(

@@ -36,6 +36,11 @@ ROSInterface::ROSInterface() {
 // Public Methods
 // ============================================================================
 
+void ROSInterface::setPlannerType(PlannerType type) {
+    auto& config = getConfig();
+    config.planner_type = type;
+}
+
 void ROSInterface::run() {
     ros::spin();
 }
@@ -335,6 +340,12 @@ void ROSInterface::runPlanningWithRetry() {
         ROS_INFO("Path generated in %.2f ms (%.2f m, %d victims, safety_margin=%.3f)",
                  path_time_ms, planner_->getTotalDistance(),
                  planner_->getNumVictimsVisited(), config.safety_margin);
+
+        // Save RRT tree if using sampling mode
+        if (config.planner_type == PlannerType::SAMPLING) {
+            std::string rrt_file = pkg_path + "/results/rrt_tree.json";
+            ROS_INFO("RRT tree saved to: %s", rrt_file.c_str());
+        }
 
         // TODO: Re-enable for actual simulation
         // planner_->sampleTrajectory();

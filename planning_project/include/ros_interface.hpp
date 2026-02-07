@@ -26,6 +26,11 @@ public:
     ROSInterface();
 
     /**
+     * @brief Set the planner type (combinatorial or sampling).
+     */
+    void setPlannerType(PlannerType type);
+
+    /**
      * @brief Start ROS event loop.
      */
     void run();
