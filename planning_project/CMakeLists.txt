@@ -141,6 +141,8 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(planning_node
   src/planning_node.cpp
+  src/planner.cpp
+  src/ros_interface.cpp
   src/geometry_utils.cpp
   src/grid_map.cpp
   src/pathfinding.cpp
