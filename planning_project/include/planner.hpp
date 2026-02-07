@@ -52,9 +52,17 @@ public:
     void addOtherRobots(const std::vector<obstacles_msgs::ObstacleMsg>& robots);
 
     /**
-     * @brief Build grid map with specified safety margin.
+     * @brief Build grid map with specified safety margin. (COMBINATORIAL only)
      */
     void buildMapWithMargin(double safety_margin);
+
+    /**
+     * @brief Prepare collision geometry without building grid map. (SAMPLING only)
+     *
+     * Inflates obstacles and shrinks borders for collision checking,
+     * but does not build any grid or cell graph.
+     */
+    void prepareCollisionGeometry(double safety_margin);
 
     // ========================================================================
     // Distance Matrix
@@ -70,12 +78,20 @@ public:
     );
 
     /**
-     * @brief Compute distance matrix between all points.
+     * @brief Compute distance matrix using A* on cell graph. (COMBINATORIAL only)
      */
     void computeDistanceMatrix();
 
     /**
-     * @brief Check if all victims are reachable from start and to gate.
+     * @brief Compute distance matrix using Euclidean distances. (SAMPLING only)
+     *
+     * Uses Euclidean distance with a conservative factor to account for
+     * obstacle avoidance. No grid map required.
+     */
+    void computeEuclideanDistanceMatrix();
+
+    /**
+     * @brief Check if all victims are reachable from start and to gate. (COMBINATORIAL only)
      * @param safety_margin Current safety margin (for logging)
      * @return true if all victims are reachable, false otherwise
      */

@@ -39,7 +39,8 @@ struct Config {
     // Robot velocity (constant speed assumption)
     double robot_velocity = 1;      // m/s
 
-    double dubins_factor = 1.2;     // heuristic multiplier for Dubins distance estimation
+    double dubins_factor = 1.2;             // heuristic multiplier for Dubins distance estimation
+    double euclidean_dubins_factor = 1.4;   // multiplier for estimating Dubins distance from Euclidean
 
     // Computed helper
     double totalInflation() const {

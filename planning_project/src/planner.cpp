@@ -59,6 +59,13 @@ void Planner::buildMapWithMargin(double safety_margin) {
     cell_graph_->buildFromGridMap(*grid_map_);
 }
 
+void Planner::prepareCollisionGeometry(double safety_margin) {
+    // Inflate obstacles and shrink borders for collision checking only.
+    // No grid map or cell graph is built.
+    inflated_obstacles_ = inflateObstacles(obstacles_);
+    shrunk_borders_ = shrinkBorders(borders_);
+}
+
 // ============================================================================
 // Distance Matrix
 // ============================================================================
@@ -99,6 +106,29 @@ void Planner::computeDistanceMatrix() {
     // Compute distance matrix using A* × heuristic factor
     distance_matrix_ = computeDubinsDistanceMatrix(
         *cell_graph_, points, headings, inflated_obstacles_);
+}
+
+void Planner::computeEuclideanDistanceMatrix() {
+    // Build points list: [start, victim0, victim1, ..., gate]
+    std::vector<std::pair<double, double>> points;
+    points.push_back({robot_x_, robot_y_});
+    for (const auto& v : victims_) {
+        points.push_back({v.x, v.y});
+    }
+    points.push_back({gate_x_, gate_y_});
+
+    int n = points.size();
+    distance_matrix_.assign(n, std::vector<double>(n, 0.0));
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (i != j) {
+                double dx = points[j].first - points[i].first;
+                double dy = points[j].second - points[i].second;
+                distance_matrix_[i][j] = std::sqrt(dx*dx + dy*dy) * getConfig().euclidean_dubins_factor;
+            }
+        }
+    }
 }
 
 bool Planner::checkVictimsReachable(double safety_margin) const {

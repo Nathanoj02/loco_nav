@@ -267,6 +267,11 @@ void ROSInterface::runPlanningWithRetry() {
     auto& config = getConfig();
     auto t_total_start = std::chrono::high_resolution_clock::now();
 
+    std::string pkg_path = ros::package::getPath("planning-project");
+
+    // Set goal data (common to both approaches)
+    planner_->setGoalData(robot_x_, robot_y_, robot_theta_, victims_, gate_x_, gate_y_, gate_theta_);
+
     for (double margin = config.max_safety_margin;
          margin >= config.min_safety_margin - 1e-9;
          margin -= config.margin_step)
@@ -275,37 +280,53 @@ void ROSInterface::runPlanningWithRetry() {
         ROS_INFO("=== Attempting with safety_margin=%.3f (inflation=%.3f) ===",
                  config.safety_margin, config.totalInflation());
 
-        // Build map with new margin
-        auto t_map_start = std::chrono::high_resolution_clock::now();
-        planner_->buildMapWithMargin(config.safety_margin);
-        auto t_map_end = std::chrono::high_resolution_clock::now();
-        double map_time_ms = std::chrono::duration<double, std::milli>(t_map_end - t_map_start).count();
+        double map_time_ms = 0.0;
+        double dist_time_ms = 0.0;
 
-        std::string pkg_path = ros::package::getPath("planning-project");
-        std::string map_file = pkg_path + "/results/map.json";
-        if (planner_->saveMapToFile(map_file)) {
-            ROS_INFO("Grid map saved for visualization");
-        }
+        if (config.planner_type == PlannerType::COMBINATORIAL) {
+            // -- COMBINATORIAL: grid map + A* distances --
+            auto t_map_start = std::chrono::high_resolution_clock::now();
+            planner_->buildMapWithMargin(config.safety_margin);
+            auto t_map_end = std::chrono::high_resolution_clock::now();
+            map_time_ms = std::chrono::duration<double, std::milli>(t_map_end - t_map_start).count();
 
-        ROS_INFO("Grid map built (%lu nodes) in %.2f ms",
-                 planner_->getCellGraph()->numNodes(), map_time_ms);
+            std::string map_file = pkg_path + "/results/map.json";
+            planner_->saveMapToFile(map_file);
 
-        // Set goal data and compute distance matrix
-        planner_->setGoalData(robot_x_, robot_y_, robot_theta_, victims_, gate_x_, gate_y_, gate_theta_);
-        auto t_dist_start = std::chrono::high_resolution_clock::now();
-        planner_->computeDistanceMatrix();
-        auto t_dist_end = std::chrono::high_resolution_clock::now();
-        double dist_time_ms = std::chrono::duration<double, std::milli>(t_dist_end - t_dist_start).count();
+            ROS_INFO("Grid map built (%lu nodes) in %.2f ms",
+                     planner_->getCellGraph()->numNodes(), map_time_ms);
 
-        ROS_INFO("Distance matrix computed (%lu victims) in %.2f ms",
-                 victims_.size(), dist_time_ms);
+            auto t_dist_start = std::chrono::high_resolution_clock::now();
+            planner_->computeDistanceMatrix();
+            auto t_dist_end = std::chrono::high_resolution_clock::now();
+            dist_time_ms = std::chrono::duration<double, std::milli>(t_dist_end - t_dist_start).count();
 
-        // Check if any victims are unreachable
-        if (config.safety_margin > config.victim_margin) {
-            if (!planner_->checkVictimsReachable(config.safety_margin)) {
-                ROS_WARN("Unreachable victims with safety_margin=%.3f, reducing...", config.safety_margin);
-                continue;
+            ROS_INFO("Distance matrix (A*) computed (%lu victims) in %.2f ms",
+                     victims_.size(), dist_time_ms);
+
+            // Check if any victims are unreachable
+            if (config.safety_margin > config.victim_margin) {
+                if (!planner_->checkVictimsReachable(config.safety_margin)) {
+                    ROS_WARN("Unreachable victims with safety_margin=%.3f, reducing...", config.safety_margin);
+                    continue;
+                }
             }
+        } else {
+            // -- SAMPLING: no grid map, Euclidean distances --
+            auto t_geom_start = std::chrono::high_resolution_clock::now();
+            planner_->prepareCollisionGeometry(config.safety_margin);
+            auto t_geom_end = std::chrono::high_resolution_clock::now();
+            map_time_ms = std::chrono::duration<double, std::milli>(t_geom_end - t_geom_start).count();
+
+            ROS_INFO("Collision geometry prepared in %.2f ms", map_time_ms);
+
+            auto t_dist_start = std::chrono::high_resolution_clock::now();
+            planner_->computeEuclideanDistanceMatrix();
+            auto t_dist_end = std::chrono::high_resolution_clock::now();
+            dist_time_ms = std::chrono::duration<double, std::milli>(t_dist_end - t_dist_start).count();
+
+            ROS_INFO("Distance matrix (Euclidean x%.1f) computed (%lu victims) in %.2f ms",
+                     config.euclidean_dubins_factor, victims_.size(), dist_time_ms);
         }
 
         // Solve orienteering
@@ -320,7 +341,7 @@ void ROSInterface::runPlanningWithRetry() {
         }
         ROS_INFO("Orienteering solved in %.2f ms", orient_time_ms);
 
-        // Try to generate path
+        // Generate path (branches internally based on planner type)
         if (config.planner_type == PlannerType::SAMPLING) {
             ROS_INFO("Using Informed RRT* for path planning...");
         } else {
@@ -341,17 +362,11 @@ void ROSInterface::runPlanningWithRetry() {
                  path_time_ms, planner_->getTotalDistance(),
                  planner_->getNumVictimsVisited(), config.safety_margin);
 
-        // Save RRT tree if using sampling mode
-        if (config.planner_type == PlannerType::SAMPLING) {
-            std::string rrt_file = pkg_path + "/results/rrt_tree.json";
-            ROS_INFO("RRT tree saved to: %s", rrt_file.c_str());
-        }
-
         // TODO: Re-enable for actual simulation
         // planner_->sampleTrajectory();
         // trajectory_ready_ = true;
 
-        // For now, just save trajectory data for offline analysis
+        // Save results
         std::string traj_file = pkg_path + "/results/trajectory.json";
         if (planner_->saveTrajectoryToFile(traj_file)) {
             ROS_INFO("Trajectory saved to: %s", traj_file.c_str());
@@ -360,9 +375,14 @@ void ROSInterface::runPlanningWithRetry() {
         auto t_total_end = std::chrono::high_resolution_clock::now();
         double total_time_ms = std::chrono::duration<double, std::milli>(t_total_end - t_total_start).count();
 
+        const char* mode = (config.planner_type == PlannerType::SAMPLING) ? "SAMPLING" : "COMBINATORIAL";
         ROS_INFO("========================================");
-        ROS_INFO("PLANNING COMPLETE - Timing Summary:");
-        ROS_INFO("  Map building:      %8.2f ms", map_time_ms);
+        ROS_INFO("PLANNING COMPLETE [%s] - Timing:", mode);
+        if (config.planner_type == PlannerType::COMBINATORIAL) {
+            ROS_INFO("  Map building:      %8.2f ms", map_time_ms);
+        } else {
+            ROS_INFO("  Collision geom:    %8.2f ms", map_time_ms);
+        }
         ROS_INFO("  Distance matrix:   %8.2f ms", dist_time_ms);
         ROS_INFO("  Orienteering:      %8.2f ms", orient_time_ms);
         ROS_INFO("  Path generation:   %8.2f ms", path_time_ms);
