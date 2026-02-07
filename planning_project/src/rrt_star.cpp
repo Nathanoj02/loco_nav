@@ -114,8 +114,6 @@ RRTResult InformedRRTStar::plan(
                 near_node->parent = new_node.get();
                 near_node->cost = new_cost;
                 new_node->children.push_back(near_node);
-
-                // Propagate cost update to descendants (simplified - full propagation would be recursive)
             }
         }
 
@@ -203,7 +201,7 @@ std::pair<double, double> InformedRRTStar::sampleUnitBall() {
 }
 
 RRTNode* InformedRRTStar::nearest(double x, double y) {
-    // Linear search (could use KD-tree for better performance)
+    // Linear search
     RRTNode* nearest_node = nullptr;
     double min_dist = std::numeric_limits<double>::infinity();
 

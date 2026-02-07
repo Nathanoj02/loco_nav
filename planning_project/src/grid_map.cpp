@@ -201,14 +201,14 @@ CellState GridMap::classifyCellVsPolygon(int gx, int gy,
     if (inside_count == 4) {
         return CellState::OCCUPIED;  // Cell fully inside obstacle
     } else if (inside_count == 0) {
-        // All cell corners outside obstacle - but check:
+        // All cell corners outside obstacle -> check:
         // 1. Obstacle edge might cross the cell
         // 2. Obstacle might be entirely inside the cell
         if (polygonIntersectsRect(polygon, x0, y0, x1, y1) ||
             polygonInsideRect(polygon, x0, y0, x1, y1)) {
             return CellState::MIXED;
         }
-        return CellState::FREE;  // Truly free
+        return CellState::FREE;
     } else {
         return CellState::MIXED;  // Partially inside
     }
@@ -218,7 +218,7 @@ void GridMap::markObstacles(const std::vector<geometry_msgs::Polygon>& obstacles
     for (const auto& obstacle : obstacles) {
         if (obstacle.points.size() < 3) continue;
 
-        // Compute obstacle bounding box for efficiency
+        // Compute obstacle bounding box
         double obs_min_x = obstacle.points[0].x, obs_max_x = obstacle.points[0].x;
         double obs_min_y = obstacle.points[0].y, obs_max_y = obstacle.points[0].y;
         for (const auto& pt : obstacle.points) {
@@ -324,7 +324,7 @@ CellState GridMap::classifyRectVsPolygon(double x0, double y0, double x1, double
     if (inside_count == 4) {
         return CellState::OCCUPIED;  // Rect fully inside obstacle
     } else if (inside_count == 0) {
-        // All rect corners outside obstacle - but check:
+        // All rect corners outside obstacle -> check:
         // 1. Obstacle edge might cross the rect
         // 2. Obstacle might be entirely inside the rect
         if (polygonIntersectsRect(polygon, x0, y0, x1, y1) ||
@@ -390,7 +390,7 @@ void GridMap::subdivideCell(double x0, double y0, double x1, double y1,
 
     // MIXED cell - check if we can subdivide further
     if (depth >= max_depth) {
-        // At max depth, treat MIXED as OCCUPIED (conservative)
+        // At max depth, treat MIXED as OCCUPIED
         leaf_cells_.push_back({x0, y0, x1, y1, CellState::OCCUPIED, depth});
         return;
     }

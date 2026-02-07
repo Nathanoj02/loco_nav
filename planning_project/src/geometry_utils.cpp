@@ -132,8 +132,7 @@ geometry_msgs::Polygon circleToPolygon(
 }
 
 bool isCircleObstacle(const obstacles_msgs::ObstacleMsg& obstacle) {
-    // Circle obstacles have radius > 0 and typically 1 point (center)
-    // or sometimes the polygon is empty and only radius + center are used
+    // Circle obstacles have radius > 0
     return obstacle.radius > 0.0;
 }
 
@@ -146,7 +145,7 @@ geometry_msgs::Polygon inflateObstacle(
         double cx = 0.0, cy = 0.0;
 
         if (!obstacle.polygon.points.empty()) {
-            // Center is the first (and usually only) point
+            // Center is the only point
             cx = obstacle.polygon.points[0].x;
             cy = obstacle.polygon.points[0].y;
         }

@@ -20,11 +20,6 @@ bool intervalsOverlap(double a0, double a1, double b0, double b1) {
 }  // namespace
 
 bool CellGraph::cellsAdjacent(const Cell& a, const Cell& b) const {
-    // Two cells are adjacent if they share a boundary segment
-    // This happens when:
-    // 1. One dimension's edges are touching (equal within epsilon)
-    // 2. The other dimension's intervals overlap
-
     // Check if right edge of a touches left edge of b (or vice versa)
     bool x_touch_right = std::abs(a.x1 - b.x0) < EPSILON;
     bool x_touch_left = std::abs(a.x0 - b.x1) < EPSILON;
@@ -73,8 +68,7 @@ void CellGraph::buildFromGridMap(const GridMap& grid_map) {
     size_t n = cells_.size();
     adjacency_.resize(n);
 
-    // Build adjacency list - O(n^2) but acceptable for reasonable cell counts
-    // Could be optimized with spatial indexing for large maps
+    // Build adjacency list - O(n^2)
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = i + 1; j < n; ++j) {
             if (cellsAdjacent(cells_[i], cells_[j])) {
@@ -440,7 +434,7 @@ std::vector<Point> buildSafeWaypoints(
             auto path_result = graph.findPath(x1, y1, x2, y2);
 
             if (path_result.found && path_result.waypoints.size() > 2) {
-                // Aggressively simplify using line-of-sight pruning
+                // Simplify using line-of-sight pruning
                 auto simplified = lineOfSightSimplify(path_result.waypoints, obstacles, border);
 
                 for (size_t j = 1; j < simplified.size() - 1; ++j) {
