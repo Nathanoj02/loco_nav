@@ -1,7 +1,6 @@
 #include "grid_map.hpp"
 #include <algorithm>
 #include <cmath>
-#include <sstream>
 #include <iostream>
 #include <fstream>
 
@@ -311,21 +310,6 @@ void GridMap::getCellCounts(int& free_count, int& occupied_count, int& mixed_cou
     }
 }
 
-std::string GridMap::getSummary() const {
-    int free_count, occupied_count, mixed_count;
-    getCellCounts(free_count, occupied_count, mixed_count);
-
-    std::ostringstream ss;
-    ss << "GridMap: " << width_ << "x" << height_
-       << " cells (resolution: " << resolution_ << "m)\n"
-       << "World bounds: [" << min_x_ << ", " << min_y_ << "] to ["
-       << max_x_ << ", " << max_y_ << "]\n"
-       << "Cells: " << free_count << " FREE, "
-       << occupied_count << " OCCUPIED, "
-       << mixed_count << " MIXED";
-    return ss.str();
-}
-
 CellState GridMap::classifyRectVsPolygon(double x0, double y0, double x1, double y1,
                                           const geometry_msgs::Polygon& polygon) const {
     // Check all four corners of rect vs polygon (obstacle)
@@ -462,16 +446,6 @@ void GridMap::refineMixedCells(const std::vector<geometry_msgs::Polygon>& obstac
               << "  MIXED cells subdivided: " << mixed_count << " (max depth=" << max_depth << ")\n"
               << "  Leaf cells: " << leaf_cells_.size() << " total ("
               << free_count << " FREE, " << occupied_count << " OCCUPIED)" << std::endl;
-}
-
-std::vector<const Cell*> GridMap::getFreeCells() const {
-    std::vector<const Cell*> free_cells;
-    for (const auto& cell : leaf_cells_) {
-        if (cell.state == CellState::FREE) {
-            free_cells.push_back(&cell);
-        }
-    }
-    return free_cells;
 }
 
 bool GridMap::saveToFile(const std::string& filename) const {

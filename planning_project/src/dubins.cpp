@@ -1,8 +1,6 @@
 #include "dubins.hpp"
-#include <cmath>
-
 #include "math_utils.hpp"
-#include <cstdio>
+#include <cmath>
 
 /**
  * Response structure for Dubins path primitives

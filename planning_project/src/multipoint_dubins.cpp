@@ -1,8 +1,6 @@
 #include "multipoint_dubins.hpp"
 #include "math_utils.hpp"
-
 #include <cmath>
-#include <cstdio>
 #include <unordered_map>
 
 /**

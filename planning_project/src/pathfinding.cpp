@@ -100,12 +100,6 @@ size_t CellGraph::numEdges() const {
     return count / 2;  // Each edge counted twice
 }
 
-const std::vector<size_t>& CellGraph::getNeighbors(size_t cell_idx) const {
-    static const std::vector<size_t> empty;
-    if (cell_idx >= adjacency_.size()) return empty;
-    return adjacency_[cell_idx];
-}
-
 int CellGraph::findCellContaining(double x, double y) const {
     for (size_t i = 0; i < cells_.size(); ++i) {
         const Cell& c = cells_[i];
@@ -200,62 +194,6 @@ PathResult CellGraph::findPath(double start_x, double start_y,
     return result;
 }
 
-std::vector<std::vector<double>> computeDistanceMatrix(
-    const CellGraph& graph,
-    const std::vector<std::pair<double, double>>& points) {
-
-    size_t n = points.size();
-    std::vector<std::vector<double>> matrix(n, std::vector<double>(n, -1.0));
-
-    for (size_t i = 0; i < n; ++i) {
-        matrix[i][i] = 0.0;  // Distance to self is 0
-
-        for (size_t j = i + 1; j < n; ++j) {
-            auto result = graph.findPath(points[i].first, points[i].second,
-                                         points[j].first, points[j].second);
-            if (result.found) {
-                matrix[i][j] = result.distance;
-                matrix[j][i] = result.distance;  // Symmetric
-            }
-        }
-    }
-
-    return matrix;
-}
-
-std::vector<std::pair<double, double>> simplifyPath(
-    const std::vector<std::pair<double, double>>& waypoints,
-    double angle_threshold) {
-
-    if (waypoints.size() <= 2) {
-        return waypoints;
-    }
-
-    std::vector<std::pair<double, double>> simplified;
-    simplified.push_back(waypoints[0]);
-
-    for (size_t i = 1; i < waypoints.size() - 1; ++i) {
-        double dx1 = waypoints[i].first - waypoints[i-1].first;
-        double dy1 = waypoints[i].second - waypoints[i-1].second;
-        double dx2 = waypoints[i+1].first - waypoints[i].first;
-        double dy2 = waypoints[i+1].second - waypoints[i].second;
-
-        double angle1 = std::atan2(dy1, dx1);
-        double angle2 = std::atan2(dy2, dx2);
-
-        double angle_diff = std::abs(angle2 - angle1);
-        if (angle_diff > M_PI) angle_diff = 2 * M_PI - angle_diff;
-
-        // Keep waypoint if direction changes significantly
-        if (angle_diff > angle_threshold) {
-            simplified.push_back(waypoints[i]);
-        }
-    }
-
-    simplified.push_back(waypoints.back());
-    return simplified;
-}
-
 bool segmentCollisionFree(
     double x1, double y1, double x2, double y2,
     const std::vector<geometry_msgs::Polygon>& obstacles,
@@ -311,49 +249,6 @@ std::vector<std::pair<double, double>> lineOfSightSimplify(
     std::cout << "  Line-of-sight simplification: " << waypoints.size()
               << " -> " << simplified.size() << " waypoints" << std::endl;
     return simplified;
-}
-
-double computeDubinsPathLength(
-    const std::vector<std::pair<double, double>>& waypoints,
-    double start_theta,
-    double end_theta,
-    double kmax) {
-
-    if (waypoints.size() < 2) {
-        return 0.0;
-    }
-
-    double total_length = 0.0;
-
-    // Compute heading at each waypoint based on direction to next waypoint
-    std::vector<double> headings(waypoints.size());
-    headings[0] = start_theta;
-    headings.back() = end_theta;
-
-    // Estimate intermediate headings as direction to next waypoint
-    for (size_t i = 1; i < waypoints.size() - 1; ++i) {
-        double dx = waypoints[i+1].first - waypoints[i].first;
-        double dy = waypoints[i+1].second - waypoints[i].second;
-        headings[i] = std::atan2(dy, dx);
-    }
-
-    // Compute Dubins path between consecutive waypoints
-    for (size_t i = 0; i < waypoints.size() - 1; ++i) {
-        Pose start_pose = {waypoints[i].first, waypoints[i].second, headings[i]};
-        Pose end_pose = {waypoints[i+1].first, waypoints[i+1].second, headings[i+1]};
-
-        int pidx;
-        DubinsCurve curve;
-        float length = dubins_shortest_path(pidx, curve, start_pose, end_pose, kmax);
-
-        if (pidx < 0 || length >= MAXFLOAT) {
-            return -1.0;  // No valid Dubins path
-        }
-
-        total_length += length;
-    }
-
-    return total_length;
 }
 
 std::vector<std::pair<double, double>> sampleDubinsCurve(

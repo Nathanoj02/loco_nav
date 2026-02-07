@@ -3,7 +3,6 @@
 #include <geometry_msgs/Polygon.h>
 #include <geometry_msgs/PoseArray.h>
 #include <nav_msgs/Odometry.h>
-#include <std_msgs/Float32.h>
 #include <std_msgs/Int32.h>
 #include <rosgraph_msgs/Clock.h>
 #include <obstacles_msgs/ObstacleArrayMsg.h>
@@ -14,7 +13,6 @@
 #include "rrt_star.hpp"
 #include "orienteering.hpp"
 #include "config.hpp"
-#include "math_utils.hpp"
 #include <memory>
 #include <iomanip>
 #include <fstream>

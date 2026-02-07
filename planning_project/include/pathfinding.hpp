@@ -2,13 +2,10 @@
 #define PLANNING_PROJECT_PATHFINDING_HPP
 
 #include <vector>
-#include <unordered_map>
-#include <optional>
 #include <array>
 #include "grid_map.hpp"
 #include "dubins.hpp"
 #include "multipoint_dubins.hpp"
-#include "config.hpp"
 
 namespace planning {
 
@@ -61,16 +58,6 @@ public:
      */
     size_t numEdges() const;
 
-    /**
-     * @brief Get the cells (for external access).
-     */
-    const std::vector<Cell>& getCells() const { return cells_; }
-
-    /**
-     * @brief Get neighbors of a cell.
-     */
-    const std::vector<size_t>& getNeighbors(size_t cell_idx) const;
-
 private:
     std::vector<Cell> cells_;  // FREE cells only
     std::vector<std::vector<size_t>> adjacency_;  // adjacency list
@@ -84,30 +71,6 @@ private:
     // Heuristic for A* (Euclidean distance to goal)
     double heuristic(const Cell& cell, double goal_x, double goal_y) const;
 };
-
-/**
- * @brief Compute distance matrix between a set of points using A* (Euclidean).
- *
- * @param graph The cell graph for pathfinding
- * @param points Vector of (x, y) coordinates
- * @return NxN matrix of distances (-1 if no path exists)
- */
-std::vector<std::vector<double>> computeDistanceMatrix(
-    const CellGraph& graph,
-    const std::vector<std::pair<double, double>>& points);
-
-/**
- * @brief Simplify a path by removing collinear waypoints.
- *
- * Keeps only waypoints where direction changes significantly.
- *
- * @param waypoints Original waypoints from A*
- * @param angle_threshold Minimum angle change to keep a waypoint (radians)
- * @return Simplified waypoint list
- */
-std::vector<std::pair<double, double>> simplifyPath(
-    const std::vector<std::pair<double, double>>& waypoints,
-    double angle_threshold = 0.1);
 
 /**
  * @brief Check if a straight-line segment is collision-free.
@@ -138,21 +101,6 @@ bool segmentCollisionFree(
 std::vector<std::pair<double, double>> lineOfSightSimplify(
     const std::vector<std::pair<double, double>>& waypoints,
     const std::vector<geometry_msgs::Polygon>& obstacles);
-
-/**
- * @brief Compute Dubins path length through a sequence of waypoints.
- *
- * @param waypoints Sequence of (x, y) waypoints
- * @param start_theta Starting orientation
- * @param end_theta Ending orientation (at last waypoint)
- * @param kmax Maximum curvature (1/rho)
- * @return Total Dubins path length, or -1 if no valid path
- */
-double computeDubinsPathLength(
-    const std::vector<std::pair<double, double>>& waypoints,
-    double start_theta,
-    double end_theta,
-    double kmax);
 
 /**
  * @brief Sample points along a Dubins curve for collision checking.

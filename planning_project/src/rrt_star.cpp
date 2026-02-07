@@ -1,11 +1,8 @@
 #include "rrt_star.hpp"
-#include "geometry_utils.hpp"
 #include "grid_map.hpp"  // For pointInPolygon
 #include <algorithm>
 #include <iostream>
 #include <chrono>
-#include <fstream>
-#include <iomanip>
 
 namespace planning {
 
@@ -21,10 +18,6 @@ InformedRRTStar::InformedRRTStar(
     // Seed RNG with current time
     auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
     rng_.seed(static_cast<unsigned int>(seed));
-}
-
-InformedRRTStar::~InformedRRTStar() {
-    // unique_ptr handles cleanup
 }
 
 RRTResult InformedRRTStar::plan(
@@ -341,86 +334,6 @@ std::vector<std::pair<double, double>> InformedRRTStar::extractPath(RRTNode* goa
     return path;
 }
 
-bool InformedRRTStar::saveToFile(const std::string& filename,
-                                  const std::vector<std::pair<double, double>>& path) const {
-    std::ofstream file(filename);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open RRT* file for writing: " << filename << std::endl;
-        return false;
-    }
-
-    file << std::fixed << std::setprecision(6);
-    file << "{\n";
-
-    // Save bounds
-    file << "  \"bounds\": {\n";
-    file << "    \"min_x\": " << bounds_[0] << ",\n";
-    file << "    \"max_x\": " << bounds_[1] << ",\n";
-    file << "    \"min_y\": " << bounds_[2] << ",\n";
-    file << "    \"max_y\": " << bounds_[3] << "\n";
-    file << "  },\n";
-
-    // Save all nodes
-    file << "  \"nodes\": [\n";
-    for (size_t i = 0; i < nodes_.size(); ++i) {
-        const auto& node = nodes_[i];
-        file << "    {\"x\": " << node->x << ", \"y\": " << node->y
-             << ", \"cost\": " << node->cost;
-
-        // Find parent index
-        int parent_idx = -1;
-        if (node->parent) {
-            for (size_t j = 0; j < nodes_.size(); ++j) {
-                if (nodes_[j].get() == node->parent) {
-                    parent_idx = static_cast<int>(j);
-                    break;
-                }
-            }
-        }
-        file << ", \"parent\": " << parent_idx << "}";
-
-        if (i < nodes_.size() - 1) file << ",";
-        file << "\n";
-    }
-    file << "  ],\n";
-
-    // Save edges (parent-child connections)
-    file << "  \"edges\": [\n";
-    bool first_edge = true;
-    for (size_t i = 0; i < nodes_.size(); ++i) {
-        const auto& node = nodes_[i];
-        if (node->parent) {
-            if (!first_edge) file << ",\n";
-            first_edge = false;
-            file << "    {\"from\": [" << node->parent->x << ", " << node->parent->y
-                 << "], \"to\": [" << node->x << ", " << node->y << "]}";
-        }
-    }
-    file << "\n  ],\n";
-
-    // Save solution path
-    file << "  \"path\": [\n";
-    for (size_t i = 0; i < path.size(); ++i) {
-        file << "    [" << path[i].first << ", " << path[i].second << "]";
-        if (i < path.size() - 1) file << ",";
-        file << "\n";
-    }
-    file << "  ],\n";
-
-    // Save statistics
-    file << "  \"stats\": {\n";
-    file << "    \"num_nodes\": " << nodes_.size() << ",\n";
-    file << "    \"best_cost\": " << c_best_ << ",\n";
-    file << "    \"min_cost\": " << c_min_ << "\n";
-    file << "  }\n";
-
-    file << "}\n";
-    file.close();
-
-    std::cout << "RRT* tree saved to: " << filename << std::endl;
-    return true;
-}
-
 // ============================================================================
 // Path Smoothing
 // ============================================================================
@@ -522,61 +435,6 @@ std::vector<std::pair<double, double>> smoothRRTPath(
     }
 
     return smoothed;
-}
-
-// ============================================================================
-// Distance Matrix Computation
-// ============================================================================
-
-std::vector<std::vector<double>> computeRRTDistanceMatrix(
-    const std::vector<geometry_msgs::Polygon>& obstacles,
-    const std::array<double, 4>& bounds,
-    const std::vector<std::pair<double, double>>& points,
-    int max_iterations_per_query) {
-
-    size_t n = points.size();
-    std::vector<std::vector<double>> matrix(n, std::vector<double>(n, -1.0));
-
-    std::cout << "Computing RRT* distance matrix for " << n << " points..." << std::endl;
-
-    for (size_t i = 0; i < n; ++i) {
-        matrix[i][i] = 0.0;
-
-        for (size_t j = i + 1; j < n; ++j) {
-            InformedRRTStar rrt(obstacles, bounds);
-            rrt.setStepSize(0.4);
-
-            auto result = rrt.plan(
-                points[i].first, points[i].second,
-                points[j].first, points[j].second,
-                max_iterations_per_query,
-                0.3);
-
-            if (result.found) {
-                // Smooth path and compute actual length
-                auto smoothed = smoothRRTPath(result.path, obstacles, 30, 20);
-
-                // Compute path length
-                double length = 0.0;
-                for (size_t k = 1; k < smoothed.size(); ++k) {
-                    double dx = smoothed[k].first - smoothed[k - 1].first;
-                    double dy = smoothed[k].second - smoothed[k - 1].second;
-                    length += std::sqrt(dx * dx + dy * dy);
-                }
-
-                // Apply Dubins factor (curves add ~30% overhead)
-                double dubins_factor = 1.3;
-                matrix[i][j] = length * dubins_factor;
-                matrix[j][i] = matrix[i][j];
-
-                std::cout << "  Path " << i << " -> " << j << ": " << matrix[i][j] << " m" << std::endl;
-            } else {
-                std::cout << "  Path " << i << " -> " << j << ": NO PATH FOUND" << std::endl;
-            }
-        }
-    }
-
-    return matrix;
 }
 
 }  // namespace planning

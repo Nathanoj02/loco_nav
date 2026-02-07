@@ -18,7 +18,7 @@ struct Config {
     int refinement_depth = 3;           // max subdivision depth for MIXED cells
 
     // RRT* parameters (for sampling)
-    int rrt_max_iterations = 5000;      // max iterations per query
+    int rrt_max_iterations = 3000;      // max iterations per query
     double rrt_step_size = 0.4;         // extension step size
     double rrt_goal_radius = 0.3;       // goal acceptance radius
 

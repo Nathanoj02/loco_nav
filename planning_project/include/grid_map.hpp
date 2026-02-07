@@ -122,16 +122,6 @@ public:
     const std::vector<Cell>& getLeafCells() const { return leaf_cells_; }
 
     /**
-     * @brief Get only FREE leaf cells (for pathfinding graph nodes).
-     */
-    std::vector<const Cell*> getFreeCells() const;
-
-    /**
-     * @brief Get a string summary of the map.
-     */
-    std::string getSummary() const;
-
-    /**
      * @brief Save map to file for visualization.
      *
      * Saves grid map data (leaf cells with state, bounds, depth) to a JSON file.

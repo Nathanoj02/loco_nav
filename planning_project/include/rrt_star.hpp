@@ -49,8 +49,6 @@ public:
         const std::vector<geometry_msgs::Polygon>& obstacles,
         const std::array<double, 4>& bounds);
 
-    ~InformedRRTStar();
-
     /**
      * @brief Plan a path from start to goal
      * @param start_x, start_y Start position
@@ -79,15 +77,6 @@ public:
      * @brief Get all nodes (for visualization)
      */
     const std::vector<std::unique_ptr<RRTNode>>& getNodes() const { return nodes_; }
-
-    /**
-     * @brief Save tree to JSON file for visualization
-     * @param filename Output file path
-     * @param path The solution path (if found)
-     * @return true if saved successfully
-     */
-    bool saveToFile(const std::string& filename,
-                    const std::vector<std::pair<double, double>>& path = {}) const;
 
 private:
     // Obstacle data
@@ -147,23 +136,6 @@ std::vector<std::pair<double, double>> smoothRRTPath(
     const std::vector<geometry_msgs::Polygon>& obstacles,
     int shortcut_iterations = 50,
     int smooth_iterations = 30);
-
-/**
- * @brief Compute distance matrix using Informed RRT*
- *
- * For each pair of points, runs RRT* to find optimal path.
- *
- * @param obstacles Inflated obstacles
- * @param bounds World boundaries
- * @param points Vector of (x, y) coordinates
- * @param max_iterations_per_query Max RRT* iterations per path
- * @return NxN matrix of distances (-1 if no path)
- */
-std::vector<std::vector<double>> computeRRTDistanceMatrix(
-    const std::vector<geometry_msgs::Polygon>& obstacles,
-    const std::array<double, 4>& bounds,
-    const std::vector<std::pair<double, double>>& points,
-    int max_iterations_per_query = 3000);
 
 }  // namespace planning
 

@@ -1,5 +1,5 @@
-#ifndef MATH_UTILS_CPP
-#define MATH_UTILS_CPP
+#ifndef MATH_UTILS_HPP
+#define MATH_UTILS_HPP
 
 /**
  * Sinc function, defined as sin(x)/x, with a Taylor series expansion around 0
@@ -23,4 +23,4 @@ float mod2pi(float angle);
  */
 float rangeSymm(float angle);
 
-#endif // MATH_UTILS_CPP
+#endif // MATH_UTILS_HPP

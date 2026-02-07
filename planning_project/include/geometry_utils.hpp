@@ -22,13 +22,6 @@ namespace planning {
 geometry_msgs::Polygon offsetPolygon(const geometry_msgs::Polygon& polygon, double offset);
 
 /**
- * @brief Offset multiple polygons by the same distance.
- */
-std::vector<geometry_msgs::Polygon> offsetPolygons(
-    const std::vector<geometry_msgs::Polygon>& polygons,
-    double offset);
-
-/**
  * @brief Convert a circle to a polygon approximation.
  *
  * @param center_x X coordinate of circle center

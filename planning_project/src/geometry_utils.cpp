@@ -112,20 +112,6 @@ geometry_msgs::Polygon offsetPolygon(const geometry_msgs::Polygon& polygon, doub
     return result;
 }
 
-std::vector<geometry_msgs::Polygon> offsetPolygons(
-    const std::vector<geometry_msgs::Polygon>& polygons,
-    double offset) {
-
-    std::vector<geometry_msgs::Polygon> result;
-    result.reserve(polygons.size());
-
-    for (const auto& poly : polygons) {
-        result.push_back(offsetPolygon(poly, offset));
-    }
-
-    return result;
-}
-
 geometry_msgs::Polygon circleToPolygon(
     double center_x,
     double center_y,
