@@ -329,11 +329,6 @@ std::vector<std::vector<double>> computeDubinsDistanceMatrix(
     const std::vector<double>& headings,
     const std::vector<geometry_msgs::Polygon>& obstacles) {
 
-    // Use A* grid distances × heuristic factor to estimate Dubins travel cost.
-    // Dubins curves add ~20-40% overhead over straight-line due to turning arcs.
-    // Actual Dubins paths are computed later for the chosen route.
-    constexpr double DUBINS_FACTOR = 1.3;
-
     size_t n = points.size();
     std::vector<std::vector<double>> matrix(n, std::vector<double>(n, -1.0));
 
@@ -348,7 +343,7 @@ std::vector<std::vector<double>> computeDubinsDistanceMatrix(
                 continue;  // No path exists
             }
 
-            double estimated_dist = path_result.distance * DUBINS_FACTOR;
+            double estimated_dist = path_result.distance * planning::getConfig().dubins_factor;
             matrix[i][j] = estimated_dist;
             matrix[j][i] = estimated_dist;
         }

@@ -1,6 +1,7 @@
 #include "ros_interface.hpp"
 #include "config.hpp"
 #include <ros/package.h>
+#include <chrono>
 
 namespace planning {
 
@@ -259,6 +260,7 @@ void ROSInterface::trySolveOrienteering() {
 
 void ROSInterface::runPlanningWithRetry() {
     auto& config = getConfig();
+    auto t_total_start = std::chrono::high_resolution_clock::now();
 
     for (double margin = config.max_safety_margin;
          margin >= config.min_safety_margin - 1e-9;
@@ -269,7 +271,10 @@ void ROSInterface::runPlanningWithRetry() {
                  config.safety_margin, config.totalInflation());
 
         // Build map with new margin
+        auto t_map_start = std::chrono::high_resolution_clock::now();
         planner_->buildMapWithMargin(config.safety_margin);
+        auto t_map_end = std::chrono::high_resolution_clock::now();
+        double map_time_ms = std::chrono::duration<double, std::milli>(t_map_end - t_map_start).count();
 
         std::string pkg_path = ros::package::getPath("planning-project");
         std::string map_file = pkg_path + "/results/map.json";
@@ -277,13 +282,18 @@ void ROSInterface::runPlanningWithRetry() {
             ROS_INFO("Grid map saved for visualization");
         }
 
-        ROS_INFO("Grid map built (%lu nodes)", planner_->getCellGraph()->numNodes());
+        ROS_INFO("Grid map built (%lu nodes) in %.2f ms",
+                 planner_->getCellGraph()->numNodes(), map_time_ms);
 
         // Set goal data and compute distance matrix
         planner_->setGoalData(robot_x_, robot_y_, robot_theta_, victims_, gate_x_, gate_y_, gate_theta_);
+        auto t_dist_start = std::chrono::high_resolution_clock::now();
         planner_->computeDistanceMatrix();
+        auto t_dist_end = std::chrono::high_resolution_clock::now();
+        double dist_time_ms = std::chrono::duration<double, std::milli>(t_dist_end - t_dist_start).count();
 
-        ROS_INFO("Distance matrix computed (%lu victims)", victims_.size());
+        ROS_INFO("Distance matrix computed (%lu victims) in %.2f ms",
+                 victims_.size(), dist_time_ms);
 
         // Check if any victims are unreachable
         if (config.safety_margin > config.victim_margin) {
@@ -294,25 +304,16 @@ void ROSInterface::runPlanningWithRetry() {
         }
 
         // Solve orienteering
-        if (!planner_->solveOrienteering(timeout_seconds_)) {
+        auto t_orient_start = std::chrono::high_resolution_clock::now();
+        bool orienteering_ok = planner_->solveOrienteering(timeout_seconds_);
+        auto t_orient_end = std::chrono::high_resolution_clock::now();
+        double orient_time_ms = std::chrono::duration<double, std::milli>(t_orient_end - t_orient_start).count();
+
+        if (!orienteering_ok) {
             ROS_WARN("No feasible route with safety_margin=%.3f, reducing...", config.safety_margin);
             continue;
         }
-
-        double velocity = config.robot_velocity;
-        double time_buffer = config.time_buffer_ratio;
-        double max_distance;
-        if (timeout_seconds_ <= 0) {
-            max_distance = 1e9;
-        } else {
-            double effective_time = timeout_seconds_ * (1.0 - time_buffer);
-            max_distance = effective_time * velocity;
-        }
-
-        ROS_INFO("Route: %d victims, dist=%.1fm (budget=%.1fm)",
-                 planner_->getNumVictimsVisited(),
-                 planner_->getTotalDistance(),
-                 max_distance);
+        ROS_INFO("Orienteering solved in %.2f ms", orient_time_ms);
 
         // Try to generate path
         if (config.planner_type == PlannerType::SAMPLING) {
@@ -321,12 +322,19 @@ void ROSInterface::runPlanningWithRetry() {
             ROS_INFO("Using A* grid search for path planning...");
         }
 
-        if (!planner_->generatePath()) {
+        auto t_path_start = std::chrono::high_resolution_clock::now();
+        bool path_ok = planner_->generatePath();
+        auto t_path_end = std::chrono::high_resolution_clock::now();
+        double path_time_ms = std::chrono::duration<double, std::milli>(t_path_end - t_path_start).count();
+
+        if (!path_ok) {
             ROS_WARN("Path generation failed with safety_margin=%.3f, reducing...", config.safety_margin);
             continue;
         }
 
-        ROS_INFO("Planning succeeded with safety_margin=%.3f", config.safety_margin);
+        ROS_INFO("Path generated in %.2f ms (%.2f m, %d victims, safety_margin=%.3f)",
+                 path_time_ms, planner_->getTotalDistance(),
+                 planner_->getNumVictimsVisited(), config.safety_margin);
 
         // TODO: Re-enable for actual simulation
         // planner_->sampleTrajectory();
@@ -338,7 +346,18 @@ void ROSInterface::runPlanningWithRetry() {
             ROS_INFO("Trajectory saved to: %s", traj_file.c_str());
         }
 
-        ROS_INFO("Planning complete. Trajectory saved. Shutting down.");
+        auto t_total_end = std::chrono::high_resolution_clock::now();
+        double total_time_ms = std::chrono::duration<double, std::milli>(t_total_end - t_total_start).count();
+
+        ROS_INFO("========================================");
+        ROS_INFO("PLANNING COMPLETE - Timing Summary:");
+        ROS_INFO("  Map building:      %8.2f ms", map_time_ms);
+        ROS_INFO("  Distance matrix:   %8.2f ms", dist_time_ms);
+        ROS_INFO("  Orienteering:      %8.2f ms", orient_time_ms);
+        ROS_INFO("  Path generation:   %8.2f ms", path_time_ms);
+        ROS_INFO("  TOTAL:             %8.2f ms", total_time_ms);
+        ROS_INFO("========================================");
+
         ros::shutdown();
         return;
     }

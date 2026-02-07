@@ -31,13 +31,15 @@ struct Config {
     double victim_margin = 0.1;         // minimum margin for victims checks
 
     // Dubins parameters
-    double dubins_rho = 1;            // minimum turning radius (v_max / omega_max)
+    double dubins_rho = 1;              // minimum turning radius (v_max / omega_max)
 
     // Time budget
     double time_buffer_ratio = 0.15;    // reserve 15% of timeout for safety
 
     // Robot velocity (constant speed assumption)
-    double robot_velocity = 1;        // m/s
+    double robot_velocity = 1;      // m/s
+
+    double dubins_factor = 1.2;     // heuristic multiplier for Dubins distance estimation
 
     // Computed helper
     double totalInflation() const {
