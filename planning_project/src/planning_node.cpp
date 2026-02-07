@@ -298,12 +298,12 @@ public:
         grid_map_->markObstacles(inflated_obstacles_);
 
         // Shrink borders and mark outside area
-        auto shrunk_borders = planning::shrinkBorders(borders_);
-        grid_map_->markOutsideBorders(shrunk_borders);
+        shrunk_borders_ = planning::shrinkBorders(borders_);
+        grid_map_->markOutsideBorders(shrunk_borders_);
 
         // Refine MIXED cells by recursive subdivision
         const int refinement_depth = config.refinement_depth;
-        grid_map_->refineMixedCells(inflated_obstacles_, shrunk_borders, refinement_depth);
+        grid_map_->refineMixedCells(inflated_obstacles_, shrunk_borders_, refinement_depth);
 
         // Save map to file for visualization
         std::string pkg_path = ros::package::getPath("planning-project");
@@ -467,13 +467,13 @@ public:
             std::array<double, 4> bounds = computeWorldBounds();
 
             waypoints = buildSafeWaypointsRRTWithSave(
-                route, robot_theta_, gate_theta_, kmax, inflated_obstacles_, bounds);
+                route, robot_theta_, gate_theta_, kmax, inflated_obstacles_, bounds, &shrunk_borders_);
         } else {
             // Use A* on grid (combinatorial approach - default)
             ROS_INFO("Using A* grid search for path planning...");
 
             waypoints = planning::buildSafeWaypoints(
-                *cell_graph_, route, robot_theta_, gate_theta_, kmax, inflated_obstacles_);
+                *cell_graph_, route, robot_theta_, gate_theta_, kmax, inflated_obstacles_, &shrunk_borders_);
         }
 
         // Generate multi-point Dubins path
@@ -481,7 +481,7 @@ public:
         Pose end_pose = {gate_x_, gate_y_, gate_theta_};
 
         dubins_path_ = planning::generateDubinsPath(
-            start_pose, end_pose, waypoints, kmax, inflated_obstacles_, 8, 2);
+            start_pose, end_pose, waypoints, kmax, inflated_obstacles_, &shrunk_borders_, 8, 2);
 
         if (dubins_path_.curves.empty() || dubins_path_.cost >= 1e30) {
             return false;
@@ -523,7 +523,8 @@ public:
         double end_theta,
         double kmax,
         const std::vector<geometry_msgs::Polygon>& obstacles,
-        const std::array<double, 4>& bounds) {
+        const std::array<double, 4>& bounds,
+        const geometry_msgs::Polygon* border) {
 
         std::vector<Point> waypoints;
         if (route.size() < 2) return waypoints;
@@ -536,7 +537,7 @@ public:
         std::ofstream file(rrt_file);
         if (!file.is_open()) {
             ROS_WARN("Failed to open RRT file: %s", rrt_file.c_str());
-            return planning::buildSafeWaypointsRRT(route, start_theta, end_theta, kmax, obstacles, bounds);
+            return planning::buildSafeWaypointsRRT(route, start_theta, end_theta, kmax, obstacles, bounds, border);
         }
 
         file << std::fixed << std::setprecision(6);
@@ -582,7 +583,7 @@ public:
             Pose pose1 = {x1, y1, theta1};
             Pose pose2 = {x2, y2, theta2};
 
-            bool collides = planning::directDubinsCollides(pose1, pose2, kmax, obstacles);
+            bool collides = planning::directDubinsCollides(pose1, pose2, kmax, obstacles, border);
 
             file << "    {\n";
             file << "      \"start\": [" << x1 << ", " << y1 << "],\n";
@@ -865,6 +866,7 @@ private:
     std::unique_ptr<planning::GridMap> grid_map_;
     std::unique_ptr<planning::CellGraph> cell_graph_;
     std::vector<geometry_msgs::Polygon> inflated_obstacles_;
+    geometry_msgs::Polygon shrunk_borders_;
     std::vector<std::vector<double>> distance_matrix_;
 
     // Chosen route (victim indices in order)

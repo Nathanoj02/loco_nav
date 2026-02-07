@@ -86,6 +86,7 @@ private:
 bool segmentCollisionFree(
     double x1, double y1, double x2, double y2,
     const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border = nullptr,
     double sample_step = 0.05);
 
 /**
@@ -100,7 +101,8 @@ bool segmentCollisionFree(
  */
 std::vector<std::pair<double, double>> lineOfSightSimplify(
     const std::vector<std::pair<double, double>>& waypoints,
-    const std::vector<geometry_msgs::Polygon>& obstacles);
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border = nullptr);
 
 /**
  * @brief Sample points along a Dubins curve for collision checking.
@@ -118,7 +120,8 @@ std::vector<std::pair<double, double>> sampleDubinsCurve(
  */
 bool pointCollidesWithObstacles(
     double x, double y,
-    const std::vector<geometry_msgs::Polygon>& obstacles);
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border = nullptr);
 
 /**
  * @brief Check if a Dubins curve collides with obstacles.
@@ -131,6 +134,7 @@ bool pointCollidesWithObstacles(
 bool dubinsCurveCollides(
     const DubinsCurve& curve,
     const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border = nullptr,
     double sample_step = 0.05);
 
 /**
@@ -168,6 +172,7 @@ bool directDubinsCollides(
     const Pose& end,
     double kmax,
     const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border = nullptr,
     double sample_step = 0.05);
 
 /**
@@ -191,7 +196,8 @@ std::vector<Point> buildSafeWaypoints(
     double start_theta,
     double end_theta,
     double kmax,
-    const std::vector<geometry_msgs::Polygon>& obstacles);
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border = nullptr);
 
 /**
  * @brief Generate complete Dubins path through route using multi-point solver.
@@ -211,6 +217,7 @@ PathInfo generateDubinsPath(
     std::vector<Point>& intermediate_points,
     double kmax,
     const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border = nullptr,
     int num_angles = 8,
     int refine_steps = 2);
 
@@ -234,7 +241,8 @@ std::vector<Point> buildSafeWaypointsRRT(
     double end_theta,
     double kmax,
     const std::vector<geometry_msgs::Polygon>& obstacles,
-    const std::array<double, 4>& bounds);
+    const std::array<double, 4>& bounds,
+    const geometry_msgs::Polygon* border = nullptr);
 
 }  // namespace planning
 

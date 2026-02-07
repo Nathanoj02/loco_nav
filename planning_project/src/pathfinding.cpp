@@ -197,6 +197,7 @@ PathResult CellGraph::findPath(double start_x, double start_y,
 bool segmentCollisionFree(
     double x1, double y1, double x2, double y2,
     const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border,
     double sample_step) {
 
     double dx = x2 - x1;
@@ -209,7 +210,7 @@ bool segmentCollisionFree(
         double x = x1 + t * dx;
         double y = y1 + t * dy;
 
-        if (pointCollidesWithObstacles(x, y, obstacles)) {
+        if (pointCollidesWithObstacles(x, y, obstacles, border)) {
             return false;
         }
     }
@@ -218,7 +219,8 @@ bool segmentCollisionFree(
 
 std::vector<std::pair<double, double>> lineOfSightSimplify(
     const std::vector<std::pair<double, double>>& waypoints,
-    const std::vector<geometry_msgs::Polygon>& obstacles) {
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border) {
 
     if (waypoints.size() <= 2) {
         return waypoints;
@@ -236,7 +238,7 @@ std::vector<std::pair<double, double>> lineOfSightSimplify(
             if (segmentCollisionFree(
                     waypoints[current].first, waypoints[current].second,
                     waypoints[j].first, waypoints[j].second,
-                    obstacles)) {
+                    obstacles, border)) {
                 farthest = j;
                 break;
             }
@@ -294,7 +296,13 @@ std::vector<std::pair<double, double>> sampleDubinsCurve(
 
 bool pointCollidesWithObstacles(
     double x, double y,
-    const std::vector<geometry_msgs::Polygon>& obstacles) {
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border) {
+
+    // Outside border = collision
+    if (border && !pointInPolygon(x, y, *border)) {
+        return true;
+    }
 
     for (const auto& obstacle : obstacles) {
         if (pointInPolygon(x, y, obstacle)) {
@@ -307,12 +315,13 @@ bool pointCollidesWithObstacles(
 bool dubinsCurveCollides(
     const DubinsCurve& curve,
     const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border,
     double sample_step) {
 
     auto samples = sampleDubinsCurve(curve, sample_step);
 
     for (const auto& pt : samples) {
-        if (pointCollidesWithObstacles(pt.first, pt.second, obstacles)) {
+        if (pointCollidesWithObstacles(pt.first, pt.second, obstacles, border)) {
             return true;
         }
     }
@@ -359,6 +368,7 @@ bool directDubinsCollides(
     const Pose& end,
     double kmax,
     const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border,
     double sample_step) {
 
     int pidx;
@@ -372,7 +382,7 @@ bool directDubinsCollides(
         return true;  // No valid Dubins path exists, treat as collision
     }
 
-    return dubinsCurveCollides(curve, obstacles, sample_step);
+    return dubinsCurveCollides(curve, obstacles, border, sample_step);
 }
 
 std::vector<Point> buildSafeWaypoints(
@@ -381,7 +391,8 @@ std::vector<Point> buildSafeWaypoints(
     double start_theta,
     double end_theta,
     double kmax,
-    const std::vector<geometry_msgs::Polygon>& obstacles) {
+    const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border) {
 
     std::vector<Point> waypoints;
 
@@ -419,7 +430,7 @@ std::vector<Point> buildSafeWaypoints(
         Pose pose2 = {x2, y2, theta2};
 
         // Check if direct Dubins collides
-        bool collides = directDubinsCollides(pose1, pose2, kmax, obstacles);
+        bool collides = directDubinsCollides(pose1, pose2, kmax, obstacles, border);
 
         if (collides) {
             std::cout << "  Segment " << i << " (" << x1 << "," << y1 << ") -> ("
@@ -430,7 +441,7 @@ std::vector<Point> buildSafeWaypoints(
 
             if (path_result.found && path_result.waypoints.size() > 2) {
                 // Aggressively simplify using line-of-sight pruning
-                auto simplified = lineOfSightSimplify(path_result.waypoints, obstacles);
+                auto simplified = lineOfSightSimplify(path_result.waypoints, obstacles, border);
 
                 for (size_t j = 1; j < simplified.size() - 1; ++j) {
                     waypoints.push_back({simplified[j].first, simplified[j].second});
@@ -456,6 +467,7 @@ PathInfo generateDubinsPath(
     std::vector<Point>& intermediate_points,
     double kmax,
     const std::vector<geometry_msgs::Polygon>& obstacles,
+    const geometry_msgs::Polygon* border,
     int num_angles,
     int refine_steps) {
 
@@ -472,9 +484,9 @@ PathInfo generateDubinsPath(
                   << ", " << intermediate_points[i].y << ")" << std::endl;
     }
 
-    // Create collision checker that tests Dubins curves against obstacles
-    DubinsCollisionFn collision_checker = [&obstacles](const DubinsCurve& curve) -> bool {
-        return dubinsCurveCollides(curve, obstacles, 0.05);
+    // Create collision checker that tests Dubins curves against obstacles and border
+    DubinsCollisionFn collision_checker = [&obstacles, border](const DubinsCurve& curve) -> bool {
+        return dubinsCurveCollides(curve, obstacles, border, 0.05);
     };
 
     PathInfo result = multi_point_dubins_shortest_path(
@@ -494,7 +506,8 @@ std::vector<Point> buildSafeWaypointsRRT(
     double end_theta,
     double kmax,
     const std::vector<geometry_msgs::Polygon>& obstacles,
-    const std::array<double, 4>& bounds) {
+    const std::array<double, 4>& bounds,
+    const geometry_msgs::Polygon* border) {
 
     std::vector<Point> waypoints;
 
@@ -533,7 +546,7 @@ std::vector<Point> buildSafeWaypointsRRT(
         Pose pose2 = {x2, y2, theta2};
 
         // Check if direct Dubins collides
-        bool collides = directDubinsCollides(pose1, pose2, kmax, obstacles);
+        bool collides = directDubinsCollides(pose1, pose2, kmax, obstacles, border);
 
         if (collides) {
             std::cout << "  Segment " << i << " (" << x1 << "," << y1 << ") -> ("
