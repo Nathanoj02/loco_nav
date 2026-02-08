@@ -147,9 +147,11 @@ def plot_trajectory_on_axes(ax, traj_data, show_labels=True):
     # Add statistics text
     if 'stats' in traj_data:
         stats = traj_data['stats']
+        # If time is 0, set it equal to distance (velocity = 1 m/s assumed)
+        time_val = stats['total_time'] if stats['total_time'] > 0 else stats['total_distance']
         stats_text = f"Path Stats:\n"
         stats_text += f"Distance: {stats['total_distance']:.2f} m\n"
-        stats_text += f"Time: {stats['total_time']:.2f} s\n"
+        stats_text += f"Time: {time_val:.2f} s\n"
         stats_text += f"Victims: {stats['num_victims_visited']}"
         ax.text(0.98, 0.02, stats_text, transform=ax.transAxes,
                 fontsize=9, verticalalignment='bottom', horizontalalignment='right',
@@ -467,20 +469,15 @@ def main():
             print(f"Trajectory info:")
             if 'stats' in trajectory_data:
                 stats = trajectory_data['stats']
+                # If time is 0, set it equal to distance (velocity = 1 m/s assumed)
+                time_val = stats['total_time'] if stats['total_time'] > 0 else stats['total_distance']
                 print(f"  Distance: {stats['total_distance']:.2f} m")
-                print(f"  Time: {stats['total_time']:.2f} s")
+                print(f"  Time: {time_val:.2f} s")
                 print(f"  Victims visited: {stats['num_victims_visited']}")
 
-    # Create both visualizations
-    print("\nGenerating standard visualization...")
+    # Create visualization
+    print("\nGenerating visualization...")
     plot_map(map_data, output_file, show=False, trajectory_data=trajectory_data)
-
-    if map_data['refined'] and output_file:
-        # Also save depth visualization
-        base, ext = os.path.splitext(output_file)
-        depth_output = f"{base}_depth{ext}"
-        print(f"Generating depth visualization...")
-        plot_map_with_depth(map_data, depth_output, show=False, trajectory_data=trajectory_data)
 
     # Show interactively
     plt.show()

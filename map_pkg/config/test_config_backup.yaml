@@ -57,7 +57,7 @@
     - 2.89227227299628
 /_/send_timeout:
   ros__parameters:
-    victims_timeout: 0
+    victims_timeout: 20
 /_/send_victims:
   ros__parameters:
     max_weight: 500.0
@@ -84,4 +84,4 @@
     - 3.2515361168149077
     - -5.603138583332532
     victims_activated: true
-    victims_timeout: 0
+    victims_timeout: 20
