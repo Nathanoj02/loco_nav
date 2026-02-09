@@ -177,18 +177,68 @@ bool Planner::solveOrienteering(int timeout_seconds) {
         max_distance = effective_time * velocity;
     }
 
-    std::vector<double> victim_values;
-    for (const auto& v : victims_) {
-        victim_values.push_back(v.value);
+    // Filter unreachable victims (distance = -1 from start or to gate)
+    size_t gate_idx = distance_matrix_.size() - 1;
+    std::vector<int> reachable_victim_indices;
+    std::vector<double> reachable_victim_values;
+
+    for (size_t i = 0; i < victims_.size(); ++i) {
+        size_t victim_idx = i + 1;  // victims are at indices 1..N in distance_matrix
+        bool reachable_from_start = (distance_matrix_[0][victim_idx] >= 0);
+        bool reachable_to_gate = (distance_matrix_[victim_idx][gate_idx] >= 0);
+
+        if (reachable_from_start && reachable_to_gate) {
+            reachable_victim_indices.push_back(i);
+            reachable_victim_values.push_back(victims_[i].value);
+        } else {
+            std::cout << "  [WARNING] Victim " << i << " at (" << victims_[i].x << ", "
+                      << victims_[i].y << ") is UNREACHABLE - skipping" << std::endl;
+        }
     }
 
-    auto result = planning::solveOrienteering(distance_matrix_, victim_values, max_distance);
+    if (reachable_victim_indices.empty()) {
+        std::cout << "  [WARNING] No reachable victims, going directly to gate" << std::endl;
+        chosen_route_.clear();
+        return true;
+    }
+
+    // Build filtered distance matrix with only reachable victims
+    size_t n_reachable = reachable_victim_indices.size();
+    std::vector<std::vector<double>> filtered_dist(n_reachable + 2, std::vector<double>(n_reachable + 2, -1.0));
+
+    // Start row/col (idx 0)
+    filtered_dist[0][0] = 0;
+    for (size_t i = 0; i < n_reachable; ++i) {
+        filtered_dist[0][i + 1] = distance_matrix_[0][reachable_victim_indices[i] + 1];
+        filtered_dist[i + 1][0] = distance_matrix_[reachable_victim_indices[i] + 1][0];
+    }
+    filtered_dist[0][n_reachable + 1] = distance_matrix_[0][gate_idx];
+    filtered_dist[n_reachable + 1][0] = distance_matrix_[gate_idx][0];
+
+    // Victim-to-victim and victim-to-gate
+    for (size_t i = 0; i < n_reachable; ++i) {
+        for (size_t j = 0; j < n_reachable; ++j) {
+            filtered_dist[i + 1][j + 1] = distance_matrix_[reachable_victim_indices[i] + 1][reachable_victim_indices[j] + 1];
+        }
+        filtered_dist[i + 1][n_reachable + 1] = distance_matrix_[reachable_victim_indices[i] + 1][gate_idx];
+        filtered_dist[n_reachable + 1][i + 1] = distance_matrix_[gate_idx][reachable_victim_indices[i] + 1];
+    }
+
+    // Gate
+    filtered_dist[n_reachable + 1][n_reachable + 1] = 0;
+
+    auto result = planning::solveOrienteering(filtered_dist, reachable_victim_values, max_distance);
 
     if (!result.feasible) {
         return false;
     }
 
-    chosen_route_ = result.route;
+    // Map filtered route indices back to original victim indices
+    chosen_route_.clear();
+    for (int filtered_idx : result.route) {
+        chosen_route_.push_back(reachable_victim_indices[filtered_idx]);
+    }
+
     return true;
 }
 
