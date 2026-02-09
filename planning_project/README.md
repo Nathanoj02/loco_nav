@@ -6,7 +6,7 @@ Uses grid-based A* pathfinding, orienteering optimization, and Dubins curve path
 ## Build
 
 ```bash
-catkin_make planning_project
+catkin_make
 source devel/setup.bash
 ```
 

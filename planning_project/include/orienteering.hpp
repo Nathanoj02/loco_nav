@@ -18,7 +18,6 @@ struct OrienteeringResult {
     double total_value = 0.0;           // Sum of collected victim values
     double total_distance = 0.0;        // Total path distance
     std::vector<int> route;             // Ordered victim indices to visit (0-indexed into victims array)
-                                        // Does NOT include start or gate - those are implicit
 };
 
 /**

@@ -85,7 +85,7 @@ void ROSInterface::victimsCallback(const obstacles_msgs::ObstacleArrayMsg::Const
 
 void ROSInterface::gatesCallback(const geometry_msgs::PoseArray::ConstPtr& msg) {
     if (!msg->poses.empty()) {
-        // Use first gate for scenario B (single gate)
+        // Gate
         gate_x_ = msg->poses[0].position.x;
         gate_y_ = msg->poses[0].position.y;
         // Extract yaw from quaternion
@@ -171,14 +171,13 @@ void ROSInterface::registerOtherRobot(const nav_msgs::Odometry::ConstPtr& msg, i
     double x = msg->pose.pose.position.x;
     double y = msg->pose.pose.position.y;
 
-    // Store separately (obstacles_ gets overwritten by obstacleCallback)
     obstacles_msgs::ObstacleMsg robot_obs;
     geometry_msgs::Point32 center;
     center.x = x;
     center.y = y;
     center.z = 0;
     robot_obs.polygon.points.push_back(center);
-    robot_obs.radius = getConfig().robot_radius;  // physical size only; inflation added later
+    robot_obs.radius = getConfig().robot_radius;  // physical size only -> inflation added later
 
     other_robot_obstacles_.push_back(robot_obs);
     other_robots_registered_[robot_id] = true;
@@ -238,8 +237,6 @@ void ROSInterface::tryBuildMap() {
     planner_->setMapData(borders_, obstacles_);
     planner_->addOtherRobots(other_robot_obstacles_);
 
-    // Don't build yet - the retry loop in runPlanningWithRetry() will
-    // build with the appropriate safety margin
     tryComputeDistanceMatrix();
 }
 
@@ -252,7 +249,6 @@ void ROSInterface::tryComputeDistanceMatrix() {
     }
     distance_matrix_computed_ = true;
 
-    // Don't build/compute yet - the retry loop handles everything
     trySolveOrienteering();
 }
 
@@ -346,7 +342,7 @@ void ROSInterface::runPlanningWithRetry() {
         }
         ROS_INFO("Orienteering solved in %.2f ms", orient_time_ms);
 
-        // Generate path (branches internally based on planner type)
+        // Generate path
         if (config.planner_type == PlannerType::SAMPLING) {
             ROS_INFO("Using Informed RRT* for path planning...");
         } else {

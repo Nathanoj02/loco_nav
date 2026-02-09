@@ -24,7 +24,6 @@ void circline(Pose* pose, float s, Pose* start_pose, float k) {
     pose->theta = mod2pi(start_pose->theta + k * s);
 }
 
-// TODO convert to class (maybe ?)
 /**
  * Create a Dubins arc given a starting pose, curvature and length
  * @param start The starting pose

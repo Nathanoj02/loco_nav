@@ -97,7 +97,7 @@ bool segmentCollisionFree(
  *
  * @param waypoints Original waypoints from A*
  * @param obstacles Inflated obstacle polygons
- * @return Simplified waypoint list (typically much shorter)
+ * @return Simplified waypoint list
  */
 std::vector<std::pair<double, double>> lineOfSightSimplify(
     const std::vector<std::pair<double, double>>& waypoints,

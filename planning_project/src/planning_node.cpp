@@ -9,7 +9,7 @@
  * Usage:
  *   rosrun planning_project planning_node --mode combinatorial
  *   rosrun planning_project planning_node --mode sampling
- *   rosrun planning_project planning_node --mode sampling --debug
+ *   rosrun planning_project planning_node --mode combinatorial --debug
  */
 int main(int argc, char** argv) {
     ros::init(argc, argv, "planning_node");

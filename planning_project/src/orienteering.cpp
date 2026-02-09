@@ -93,7 +93,7 @@ OrienteeringResult solveOrienteeringDP(
 
     // Find best route: for each subset, check if we can reach gate within budget
     double best_value = 0;
-    double best_total_dist = dist[START][GATE];  // fallback: direct to gate
+    double best_total_dist = dist[START][GATE];  // direct to gate
     size_t best_mask = 0;
     int best_last = -1;
 
@@ -111,9 +111,6 @@ OrienteeringResult solveOrienteeringDP(
 
         if (mask == 0) {
             // No victims - direct path
-            if (dist[START][GATE] <= max_distance && subset_value >= best_value) {
-                // This is the fallback, already set
-            }
             continue;
         }
 
